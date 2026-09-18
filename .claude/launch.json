@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/greyson/Downloads/plann1/apps/web", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

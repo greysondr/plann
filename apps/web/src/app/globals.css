@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+/* Variante clara del sistema de diseño Plann para la web admin
+   (sección 7 de PLANN-PROYECTO.md / sección 8 de la identidad visual):
+   fondo crema, tarjetas blancas, acento rosa único, sin blur ni glow. */
+:root {
+  --background: #f6efe4;
+  --surface: #ffffff;
+  --surface-muted: #fbf6ee;
+  --foreground: #151510;
+  --foreground-2: rgba(21, 21, 16, 0.68);
+  --foreground-3: rgba(21, 21, 16, 0.5);
+  --foreground-4: rgba(21, 21, 16, 0.36);
+  --border: rgba(21, 21, 16, 0.1);
+  --border-strong: rgba(21, 21, 16, 0.16);
+  --pink: #e9417f;
+  --pink-soft: rgba(233, 65, 127, 0.12);
+  --pink-soft-strong: rgba(233, 65, 127, 0.2);
+  --danger: #c23b3b;
+  --danger-soft: rgba(194, 59, 59, 0.1);
+  --warning: #a9741a;
+  --warning-soft: rgba(169, 116, 26, 0.12);
+  --success-ink: #1f6b46;
+  --success-soft: rgba(31, 107, 70, 0.1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-foreground-2: var(--foreground-2);
+  --color-foreground-3: var(--foreground-3);
+  --color-foreground-4: var(--foreground-4);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-pink: var(--pink);
+  --color-pink-soft: var(--pink-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success-ink: var(--success-ink);
+  --color-success-soft: var(--success-soft);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-newake);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+* {
+  border-color: var(--border);
+}
+
+::selection {
+  background: var(--pink-soft-strong);
+}
+
+/* Scrollbar discreto para las tablas y listas largas del panel. */
+.thin-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}

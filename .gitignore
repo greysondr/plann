@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.expo/
+dist/
+build/
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+apps/mobile/ios/
+apps/mobile/android/
+supabase/.branches/
+supabase/.temp/
+.claude/settings.local.json

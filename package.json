@@ -1,0 +1,11 @@
+{
+  "name": "plann-root",
+  "private": true,
+  "scripts": {
+    "mobile": "npm --prefix apps/mobile start",
+    "mobile:ios": "npm --prefix apps/mobile run ios",
+    "test:core": "npm --prefix apps/mobile test",
+    "web": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build"
+  }
+}
