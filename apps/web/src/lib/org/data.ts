@@ -225,3 +225,37 @@ export async function loadViews(eventIds: string[], days = 90): Promise<import("
   const { data } = await supabase.rpc("event_view_stats", { p_event_ids: eventIds, p_days: days });
   return ((data ?? []) as { event_id: string; day: string; views: number }[]).map((r) => ({ event_id: r.event_id, day: r.day, views: Number(r.views) }));
 }
+
+export interface OwnReview {
+  id: string;
+  event_id: string;
+  rating: number;
+  comment: string | null;
+  author_name: string;
+  reply: string | null;
+  replied_at: string | null;
+  created_at: string;
+}
+
+export async function loadReviews(organizerId: string): Promise<OwnReview[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase
+    .from("reviews")
+    .select("id, event_id, rating, comment, author_name, reply, replied_at, created_at")
+    .eq("organizer_id", organizerId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  return (data ?? []) as OwnReview[];
+}
+
+export async function loadFollowers(organizerId: string): Promise<number> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.rpc("organizer_followers", { p_organizer_id: organizerId });
+  return Number(data ?? 0);
+}
+
+export async function loadLinkStats(eventId: string): Promise<{ src: string; visits: number }[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.rpc("event_link_stats", { p_event_id: eventId });
+  return ((data ?? []) as { src: string; visits: number }[]).map((r) => ({ src: r.src, visits: Number(r.visits) }));
+}

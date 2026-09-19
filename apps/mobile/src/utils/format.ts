@@ -31,7 +31,7 @@ export function formatDuration(minutes: number): string {
 
 export function formatRating(avg: number, count: number): string {
   if (!count) return "Nuevo";
-  return `${avg.toLocaleString("es-VE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ★ · ${count} reseñas`;
+  return `${avg.toLocaleString("es-VE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ★ · ${count} ${count === 1 ? "reseña" : "reseñas"}`;
 }
 
 export function normalizeSearch(text: string): string {

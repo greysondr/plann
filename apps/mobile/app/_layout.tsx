@@ -123,6 +123,8 @@ export default function RootLayout() {
                 <Stack.Screen name="organizador/escanear" />
                 <Stack.Screen name="organizador/retiros" />
                 <Stack.Screen name="organizador/cupones" />
+                <Stack.Screen name="organizador/resenas" />
+                <Stack.Screen name="resena/[id]" />
                 <Stack.Screen name="organizador/comparar" />
                 <Stack.Screen name="organizador/reportes" />
                 <Stack.Screen name="organizador/negocio" />

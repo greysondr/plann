@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { GlassCard } from "../../../src/components/GlassCard";
 import { Chip } from "../../../src/components/Chip";
@@ -11,6 +11,8 @@ import { sumBy } from "../../../src/core/orgAnalytics";
 import { formatEventDate, formatShortDate } from "../../../src/utils/format";
 import { formatUsd } from "../../../src/core/pricing";
 import { color, fontFamily, spacing } from "../../../src/theme/tokens";
+
+const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL ?? "https://plann.app").replace(/\/$/, "");
 
 const TABS = [
   { id: "proximos", label: "Próximos" },
@@ -37,6 +39,7 @@ export default function EventosScreen() {
   const [tab, setTab] = useState("proximos");
   const [busy, setBusy] = useState<string | null>(null);
   const [repeatFor, setRepeatFor] = useState<string | null>(null);
+  const [shareFor, setShareFor] = useState<string | null>(null);
   const [interval, setIntervalDays] = useState(7);
   const [copies, setCopies] = useState(4);
   const [repeatMsg, setRepeatMsg] = useState<string | null>(null);
@@ -167,7 +170,33 @@ export default function EventosScreen() {
                     <Pressable style={styles.chip} onPress={() => { setRepeatFor(repeatFor === event.id ? null : event.id); setRepeatMsg(null); }}>
                       <Text style={styles.chipText}>Repetir</Text>
                     </Pressable>
+                    {event.slug && event.status !== "draft" && !closed && (
+                      <Pressable style={styles.chip} onPress={() => setShareFor(shareFor === event.id ? null : event.id)}>
+                        <Text style={styles.chipText}>Compartir</Text>
+                      </Pressable>
+                    )}
                   </View>
+                  {shareFor === event.id && event.slug && (
+                    <View style={styles.repeatBox}>
+                      <Text style={styles.meta}>Elige dónde lo vas a publicar: así verás cuánta gente llega desde cada canal.</Text>
+                      <View style={styles.actions}>
+                        {["instagram", "whatsapp", "facebook", "tiktok", "directo"].map((c) => (
+                          <Pressable
+                            key={c}
+                            style={styles.chip}
+                            onPress={() =>
+                              Share.share({
+                                title: event.title,
+                                message: `${event.title} · ${formatEventDate(event.startsAt)}\n${WEB_URL}/e/${event.slug}${c === "directo" ? "" : `?src=${c}`}`,
+                              })
+                            }
+                          >
+                            <Text style={styles.chipText}>{c === "directo" ? "Otro" : c.charAt(0).toUpperCase() + c.slice(1)}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
+                  )}
                   {repeatFor === event.id && (
                     <View style={styles.repeatBox}>
                       <Text style={styles.meta}>Crea copias como borrador, con las mismas entradas y sin ventas. Las revisas y publicas.</Text>

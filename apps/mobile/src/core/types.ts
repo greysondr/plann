@@ -33,6 +33,7 @@ export type RefundPolicy = "none" | "24h" | "72h" | "always";
 
 export interface EventItem {
   id: string;
+  slug?: string; // para el enlace público /e/<slug>
   organizerId: string;
   title: string;
   kind: EventKind;

@@ -1,17 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Alert, Pressable, ScrollView, Share, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EventImage } from "../../src/components/EventImage";
 import { GlassCard } from "../../src/components/GlassCard";
 import { PrimaryButton, GhostPillButton } from "../../src/components/Button";
-import { ChevronRight, HeartIcon, MapPinIcon, BellIcon, StarIcon } from "../../src/components/icons";
-import { useAppStore, useEvent } from "../../src/context/AppStore";
+import { ChevronRight, HeartIcon, MapPinIcon, BellIcon, ShareIcon } from "../../src/components/icons";
+import { useAppStore, useEvent, type Review } from "../../src/context/AppStore";
 import { formatDuration, formatEventDate, formatRating, formatShortDate } from "../../src/utils/format";
 import { defaultTicketType, remaining, saleState } from "../../src/core/ticketSales";
 import { formatUsd, formatBs, calculateOrderTotals } from "../../src/core/pricing";
 import { openInMaps } from "../../src/utils/maps";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+
+const WEB_URL = (process.env.EXPO_PUBLIC_WEB_URL ?? "https://plann.app").replace(/\/$/, "");
 
 const REFUND_LABEL: Record<string, string> = {
   none: "Sin reembolso",
@@ -25,7 +27,11 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(id);
-  const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer, recordEventView } = useAppStore();
+  const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer, recordEventView, followedOrganizers, toggleFollow, tickets, fetchEventReviews, myOrganizerId } = useAppStore();
+  const [reviews, setReviews] = useState<Review[]>([]);
+  useEffect(() => {
+    if (id) fetchEventReviews(id).then(setReviews);
+  }, [id, fetchEventReviews, event?.ratingCount]);
   useEffect(() => {
     if (id) recordEventView(id);
   }, [id, recordEventView]);
@@ -37,10 +43,13 @@ export default function EventDetailScreen() {
   const ticketType = event?.ticketTypes.find((t) => t.id === selectedTypeId) ?? (event ? defaultTicketType(event.ticketTypes) : undefined);
   const organizer = event ? getOrganizer(event.organizerId) : undefined;
 
-  const photos = event?.images && event.images.length > 0 ? event.images : event?.imageUrl ? [event.imageUrl] : [];
+  const canReview =
+    !!event && !event.sourceCurated && new Date(event.startsAt).getTime() <= Date.now() && tickets.some((t) => t.eventId === event.id && (t.status === "valid" || t.status === "used"));
+    const photos = event?.images && event.images.length > 0 ? event.images : event?.imageUrl ? [event.imageUrl] : [];
   const state = ticketType ? saleState(ticketType) : "sold_out";
   // Fuera de la ventana de venta no hay nada que comprar, aunque sobre cupo.
-  const available = ticketType && state === "on_sale" ? remaining(ticketType) : 0;
+  const finished = event?.status === "finished";
+  const available = ticketType && state === "on_sale" && !finished ? remaining(ticketType) : 0;
 
   const totals = useMemo(() => {
     if (!ticketType) return null;
@@ -113,6 +122,20 @@ export default function EventDetailScreen() {
                   <BellIcon active={isReminded} size={18} />
                 </Pressable>
               )}
+              {event.slug && !event.sourceCurated && (
+                <Pressable
+                  style={styles.circleButton}
+                  onPress={() =>
+                    Share.share({
+                      title: event.title,
+                      message: `${event.title} · ${formatEventDate(event.startsAt)}\n${WEB_URL}/e/${event.slug}?src=app`,
+                    })
+                  }
+                  accessibilityLabel="Compartir evento"
+                >
+                  <ShareIcon size={18} />
+                </Pressable>
+              )}
               <Pressable style={styles.circleButton} onPress={() => toggleFavorite(event.id)}>
                 <HeartIcon active={isFavorite} size={18} />
               </Pressable>
@@ -130,9 +153,18 @@ export default function EventDetailScreen() {
             <View style={styles.organizerRow}>
               <Text style={styles.organizerName}>{organizer.name}</Text>
               {organizer.verified && <Text style={styles.verifiedBadge}>Verificado</Text>}
+              {organizer.id !== myOrganizerId && (
+                <Pressable
+                  style={[styles.followBtn, followedOrganizers.includes(organizer.id) && styles.followBtnOn]}
+                  onPress={() => toggleFollow(organizer.id)}
+                >
+                  <Text style={[styles.followText, followedOrganizers.includes(organizer.id) && { color: color.pink }]}>
+                    {followedOrganizers.includes(organizer.id) ? "Siguiendo" : "Seguir"}
+                  </Text>
+                </Pressable>
+              )}
               {organizer.ratingCount > 0 && (
                 <View style={styles.ratingRow}>
-                  <StarIcon size={11} />
                   <Text style={styles.ratingText}>{formatRating(organizer.ratingAvg, organizer.ratingCount)}</Text>
                 </View>
               )}
@@ -184,6 +216,39 @@ export default function EventDetailScreen() {
                   </Text>
                 ))}
               </View>
+            </>
+          )}
+
+          {!event.sourceCurated && (event.ratingCount > 0 || canReview) && (
+            <>
+              <View style={styles.reviewsHead}>
+                <Text style={styles.sectionTitle}>Reseñas</Text>
+                {event.ratingCount > 0 && (
+                  <View style={styles.ratingRow}>
+                    <Text style={styles.ratingText}>{formatRating(event.ratingAvg, event.ratingCount)}</Text>
+                  </View>
+                )}
+              </View>
+              {canReview && (
+                <Pressable style={styles.reviewCta} onPress={() => router.push(`/resena/${event.id}`)}>
+                  <Text style={styles.reviewCtaText}>Calificar este evento</Text>
+                </Pressable>
+              )}
+              {reviews.slice(0, 5).map((r) => (
+                <View key={r.id} style={styles.reviewCard}>
+                  <View style={styles.reviewTop}>
+                    <Text style={styles.reviewAuthor}>{r.authorName}</Text>
+                    <Text style={styles.reviewStars}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</Text>
+                  </View>
+                  {r.comment && <Text style={styles.reviewComment}>{r.comment}</Text>}
+                  {r.reply && (
+                    <Text style={styles.reviewReply}>
+                      <Text style={{ fontFamily: fontFamily.bold, color: color.text2 }}>Respuesta del organizador: </Text>
+                      {r.reply}
+                    </Text>
+                  )}
+                </View>
+              ))}
             </>
           )}
 
@@ -292,6 +357,8 @@ export default function EventDetailScreen() {
               label={
                 event.status === "cancelled"
                   ? "Cancelado"
+                  : finished
+                    ? "Evento finalizado"
                   : event.salesPaused
                     ? "Ventas pausadas"
                     : state === "upcoming"
@@ -302,7 +369,7 @@ export default function EventDetailScreen() {
                           ? "Agotado"
                           : actionLabel
               }
-              disabled={available <= 0 || event.salesPaused || event.status === "cancelled"}
+              disabled={available <= 0 || event.salesPaused || event.status === "cancelled" || finished}
               onPress={() =>
                 router.push(`/checkout/${event.id}?ticketTypeId=${ticketType.id}&quantity=${quantity}`)
               }
@@ -372,6 +439,18 @@ const styles = StyleSheet.create({
     color: color.text,
     marginBottom: 10,
   },
+  followBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: color.pink, backgroundColor: color.pink },
+  followBtnOn: { backgroundColor: "transparent" },
+  followText: { fontFamily: fontFamily.bold, fontSize: 12, color: color.white },
+  reviewsHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  reviewCta: { alignSelf: "flex-start", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: color.pink, marginBottom: 12 },
+  reviewCtaText: { fontFamily: fontFamily.bold, fontSize: 13, color: color.white },
+  reviewCard: { padding: 14, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: "rgba(255,255,255,0.09)", gap: 6, marginBottom: 10 },
+  reviewTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  reviewAuthor: { fontFamily: fontFamily.bold, fontSize: 13.5, color: color.text },
+  reviewStars: { fontFamily: fontFamily.bold, fontSize: 13, color: color.pink },
+  reviewComment: { fontFamily: fontFamily.regular, fontSize: 13.5, lineHeight: 20, color: color.text2 },
+  reviewReply: { fontFamily: fontFamily.regular, fontSize: 12.5, lineHeight: 18, color: color.text3, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: color.pink },
   organizerRow: {
     flexDirection: "row",
     alignItems: "center",

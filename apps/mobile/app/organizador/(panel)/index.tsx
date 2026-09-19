@@ -71,7 +71,7 @@ function QuickAction({ label, onPress, primary }: { label: string; onPress: () =
 export default function OrganizadorScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets, analyticsViews } = useAppStore();
+  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets, analyticsViews, followerCount, ratingSummary } = useAppStore();
   const [range, setRange] = useState(30);
 
   const myEvents = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
@@ -175,6 +175,7 @@ export default function OrganizadorScreen() {
               return r === null ? "sin visitas aún" : `${Math.round(r * 100)}% compró`;
             })()}
           />
+          <Kpi label="Seguidores" value={String(followerCount)} hint={ratingSummary.avg === null ? "sin reseñas aún" : `★ ${ratingSummary.avg.toFixed(1)} · ${ratingSummary.count}`} />
           <Kpi label="Compradores" value={String(stats.buyers.buyers)} hint={`${Math.round(stats.buyers.repeatRate * 100)}% recurrentes`} />
         </View>
       </View>

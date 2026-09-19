@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrganizer } from "@/lib/org/session";
-import { loadAnnouncements, loadAttendees, loadEvents, loadOrders, loadTickets, loadViews } from "@/lib/org/data";
+import { loadAnnouncements, loadAttendees, loadEvents, loadLinkStats, loadOrders, loadTickets, loadViews } from "@/lib/org/data";
+import QRCode from "qrcode";
+import { SITE_URL } from "@/lib/supabase/public";
+import { SharePanel } from "@/components/org/SharePanel";
 import { attendance, checkinsByHour, cumulativeTickets, eventSettlements, funnel, sumBy, totalViews, viewToPurchaseRate, viewsSeries } from "@/lib/org/analytics";
 import { longDateTime, pct, shortDate, usd } from "@/lib/format";
 import { Button, Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, Th, Tr } from "@/components/ui";
@@ -20,7 +23,9 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
 
-  const [orders, tickets, attendees, announcements, views] = await Promise.all([loadOrders([id]), loadTickets([id]), loadAttendees(id), loadAnnouncements(id), loadViews([id], 90)]);
+  const [orders, tickets, attendees, announcements, views, linkStats] = await Promise.all([loadOrders([id]), loadTickets([id]), loadAttendees(id), loadAnnouncements(id), loadViews([id], 90), loadLinkStats(id)]);
+  const publicUrl = `${SITE_URL}/e/${event.slug}`;
+  const qr = await QRCode.toDataURL(`${publicUrl}?src=qr`, { margin: 1, width: 264 });
   const settlement = eventSettlements(orders).get(id);
   const viewCount = totalViews(views);
   const viewRate = viewToPurchaseRate(orders.filter((o) => o.status === "paid" && !o.is_comp).length, viewCount);
@@ -180,6 +185,38 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
             </div>
           </Card>
         </div>
+      )}
+
+      {!closed && event.status !== "draft" && (
+        <Card>
+          <CardHeader
+            title="Compartir"
+            subtitle="Enlace público, QR y afiche"
+            action={
+              <Link href={`/organizador/eventos/${event.id}/afiche`}>
+                <Button type="button" variant="ghost">
+                  Ver afiche imprimible
+                </Button>
+              </Link>
+            }
+          />
+          <div className="space-y-4 p-5">
+            <SharePanel baseUrl={publicUrl} qr={qr} />
+            {linkStats.length > 0 && (
+              <div className="border-t border-border pt-4">
+                <p className="mb-2 text-[12.5px] font-bold uppercase tracking-wide text-foreground-3">De dónde llegan las visitas al enlace</p>
+                <ul className="space-y-1.5 text-[13.5px]">
+                  {linkStats.map((l) => (
+                    <li key={l.src} className="flex items-center justify-between">
+                      <span className="capitalize text-foreground-2">{l.src}</span>
+                      <span className="font-bold text-foreground">{l.visits}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
 
       <Card>

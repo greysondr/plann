@@ -78,12 +78,18 @@ export default function TicketsScreen() {
             <EmptyState title="Sin tickets pasados" subtitle="Aquí aparecerán los eventos a los que ya fuiste." />
           ) : (
             pasados.map(({ ticket, event, order }) => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                event={event}
-                ticketTypeName={event.ticketTypes.find((t) => t.id === order?.ticketTypeId)?.name ?? "General"}
-              />
+              <View key={ticket.id} style={{ gap: 8 }}>
+                <TicketCard
+                  ticket={ticket}
+                  event={event}
+                  ticketTypeName={event.ticketTypes.find((t) => t.id === order?.ticketTypeId)?.name ?? "General"}
+                />
+                {event.status !== "cancelled" && ticket.status !== "void" && new Date(event.startsAt).getTime() <= Date.now() && (
+                  <Pressable onPress={() => router.push(`/resena/${event.id}`)} style={{ alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: color.pink }}>
+                    <Text style={{ fontFamily: fontFamily.bold, fontSize: 12.5, color: color.pink }}>Calificar este evento</Text>
+                  </Pressable>
+                )}
+              </View>
             ))
           ))}
 

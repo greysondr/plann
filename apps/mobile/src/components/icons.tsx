@@ -214,3 +214,13 @@ export function PlusIcon({ size = 20, color: c = color.white }: { size?: number;
     </Svg>
   );
 }
+
+export function ShareIcon({ size = 18, color: c = color.text }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 15V4" stroke={c} strokeWidth={1.9} strokeLinecap="round" />
+      <Path d="M8 8l4-4 4 4" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M6 12H5a1 1 0 00-1 1v6a1 1 0 001 1h14a1 1 0 001-1v-6a1 1 0 00-1-1h-1" stroke={c} strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}

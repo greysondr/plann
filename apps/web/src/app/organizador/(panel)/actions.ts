@@ -507,3 +507,13 @@ export async function refundOrderAction(orderId: string, _prev: FormState, formD
   revalidatePath("/organizador", "layout");
   return { ok: "Compra anulada. Sale de tu saldo y queda por devolver al comprador." };
 }
+
+export async function replyReviewAction(reviewId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const reply = String(formData.get("reply") ?? "").trim();
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("reply_review", { p_review_id: reviewId, p_reply: reply });
+  if (error) return { error: dbError(error.message, "No pudimos enviar tu respuesta.") };
+  revalidatePath("/organizador/resenas");
+  return { ok: "Respuesta publicada." };
+}

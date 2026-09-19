@@ -18,17 +18,16 @@ export interface OrganizerRow {
   legal_document: string | null;
 }
 
-const ORGANIZER_COLUMNS =
-  "id, name, slug, bio, contact_phone, logo_url, verification_status, rejection_reason, plan, commission_rate, payout_method, payout_account, legal_document";
-
 export const getOrganizerContext = cache(async () => {
   const supabase = await supabaseServer();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase.from("organizers").select(ORGANIZER_COLUMNS).eq("owner_user_id", user.id).maybeSingle();
-  return { user, organizer: (data as OrganizerRow | null) ?? null };
+  // my_organizer() devuelve la fila completa solo a su dueño (cédula, cuenta de cobro, comisión).
+  const { data } = await supabase.rpc("my_organizer");
+  const organizer = ((data as OrganizerRow[] | null) ?? [])[0] ?? null;
+  return { user, organizer };
 });
 
 // Para páginas dentro del panel: el layout ya garantizó que existe y está verificado.

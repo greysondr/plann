@@ -28,7 +28,7 @@ const Divider = () => <View style={styles.divider} />;
 export default function MasScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount, coupons } = useAppStore();
+  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount, coupons, ratingSummary, followerCount } = useAppStore();
   if (!allowed) return null;
 
   const active = events.filter((e) => e.organizerId === myOrganizerId && ["published", "sold_out", "live"].includes(e.status ?? "")).length;
@@ -62,6 +62,8 @@ export default function MasScreen() {
             <Row label="Mis eventos" hint={`${active} activos`} onPress={() => router.push("/organizador/eventos")} />
             <Divider />
             <Row label="Ventas y pedidos" hint="Filtra y consulta cada pedido" onPress={() => router.push("/organizador/ventas")} />
+            <Divider />
+            <Row label="Reseñas" hint={ratingSummary.count ? `★ ${ratingSummary.avg?.toFixed(1)} · ${ratingSummary.count} reseñas · ${followerCount} seguidores` : `${followerCount} seguidores`} onPress={() => router.push("/organizador/resenas")} />
             <Divider />
             <Row label="Comparar eventos" hint="Cuál vende más y cuál convierte mejor" onPress={() => router.push("/organizador/comparar")} />
             <Divider />

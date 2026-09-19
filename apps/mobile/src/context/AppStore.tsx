@@ -189,6 +189,16 @@ export interface NewCouponInput {
   validUntil?: string;
 }
 
+export interface Review {
+  id: string;
+  eventId: string;
+  rating: number;
+  comment?: string;
+  authorName: string;
+  reply?: string;
+  createdAt: string;
+}
+
 export interface StaffMember {
   id: string;
   email: string;
@@ -255,6 +265,14 @@ interface AppStoreValue {
   markNotificationsRead: (ids?: string[]) => Promise<void>;
   staff: StaffMember[];
   staffAssignments: StaffAssignment[];
+  followedOrganizers: string[];
+  toggleFollow: (organizerId: string) => Promise<void>;
+  followerCount: number;
+  ratingSummary: { avg: number | null; count: number };
+  fetchEventReviews: (eventId: string) => Promise<Review[]>;
+  fetchOrganizerReviews: () => Promise<Review[]>;
+  submitReview: (eventId: string, rating: number, comment: string) => Promise<Result>;
+  replyToReview: (reviewId: string, reply: string) => Promise<Result>;
   coupons: Coupon[];
   createCoupon: (input: NewCouponInput) => Promise<Result>;
   setCouponActive: (id: string, active: boolean) => Promise<Result>;
@@ -328,6 +346,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [analyticsViews, setAnalyticsViews] = useState<ViewRow[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [followedOrganizers, setFollowedOrganizers] = useState<string[]>([]);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [ratingSummary, setRatingSummary] = useState<{ avg: number | null; count: number }>({ avg: null, count: 0 });
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
@@ -408,6 +429,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       ticketTypes,
       isFeatured: false,
       isFree: ticketTypes.length > 0 && ticketTypes.every((t) => t.priceCents === 0),
+      slug: row.slug,
       sourceCurated: row.source === "curated",
       status: row.status,
       salesPaused: !!row.sales_paused,
@@ -433,6 +455,27 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       nextEvents.push(event);
       if (organizer) nextOrganizers[organizer.id] = organizer;
     }
+    // Calificaciones (vistas públicas): se pegan a cada evento y organizador.
+    const [{ data: evRatings }, { data: orgRatings }] = await Promise.all([
+      supabase.from("event_ratings").select("event_id, rating_avg, rating_count"),
+      supabase.from("organizer_ratings").select("organizer_id, rating_avg, rating_count"),
+    ]);
+    const evR = new Map((evRatings ?? []).map((r: any) => [r.event_id, r]));
+    const orgR = new Map((orgRatings ?? []).map((r: any) => [r.organizer_id, r]));
+    for (const e of nextEvents) {
+      const r: any = evR.get(e.id);
+      if (r) {
+        e.ratingAvg = Number(r.rating_avg);
+        e.ratingCount = Number(r.rating_count);
+      }
+    }
+    for (const o of Object.values(nextOrganizers)) {
+      const r: any = orgR.get(o.id);
+      if (r) {
+        o.ratingAvg = Number(r.rating_avg);
+        o.ratingCount = Number(r.rating_count);
+      }
+    }
     nextEvents.sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1));
     setEvents(nextEvents);
     setOrganizersById((prev) => ({ ...prev, ...nextOrganizers }));
@@ -440,11 +483,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // --- Perfil de organizador propio -----------------------------------------
   const fetchMyOrganizer = useCallback(async (uid: string) => {
-    const { data } = await supabase
-      .from("organizers")
-      .select("id, name, legal_document, verification_status, rejection_reason, payout_method, payout_account, bio, contact_phone, logo_url, plan, commission_rate")
-      .eq("owner_user_id", uid)
-      .maybeSingle();
+    // my_organizer() devuelve la fila completa solo a su dueño: cédula, cuenta de cobro y comisión
+    // ya no son legibles para el resto (antes cualquiera las veía sin siquiera iniciar sesión).
+    const { data: rows } = await supabase.rpc("my_organizer");
+    const data: any = (rows as any[] | null)?.[0] ?? null;
     if (data) {
       setMyOrganizerId(data.id);
       setOrganizerStatus(mapOrganizerStatus(data.verification_status));
@@ -697,6 +739,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     );
 
     setFavorites((favRows ?? []).map((r) => r.event_id));
+    const { data: followRows } = await supabase.from("follows").select("organizer_id").eq("user_id", uid);
+    setFollowedOrganizers((followRows ?? []).map((r: any) => r.organizer_id));
     setReminders((remRows ?? []).map((r) => r.event_id));
     setLoyaltyEntries(
       (loyaltyRows ?? []).map((row) => ({
@@ -741,6 +785,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setMyOrganizerId(null);
         setOrganizerOrders([]);
         setCoupons([]);
+        setFollowedOrganizers([]);
+        setFollowerCount(0);
+        setRatingSummary({ avg: null, count: 0 });
         setNotifications([]);
         setAnalyticsOrders([]);
         setAnalyticsTickets([]);
@@ -1280,6 +1327,86 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     [myEventIds, myOrganizerId, fetchAnalytics, fetchBalance, fetchEvents]
   );
 
+  const toggleFollow = useCallback(
+    async (organizerId: string) => {
+      if (!userId) return;
+      const following = followedOrganizers.includes(organizerId);
+      setFollowedOrganizers((l) => (following ? l.filter((id) => id !== organizerId) : [...l, organizerId]));
+      const { error } = following
+        ? await supabase.from("follows").delete().eq("user_id", userId).eq("organizer_id", organizerId)
+        : await supabase.from("follows").insert({ user_id: userId, organizer_id: organizerId });
+      if (error) setFollowedOrganizers((l) => (following ? [...l, organizerId] : l.filter((id) => id !== organizerId)));
+    },
+    [userId, followedOrganizers]
+  );
+
+  const mapReview = (r: any): Review => ({
+    id: r.id,
+    eventId: r.event_id,
+    rating: r.rating,
+    comment: r.comment ?? undefined,
+    authorName: r.author_name,
+    reply: r.reply ?? undefined,
+    createdAt: r.created_at,
+  });
+
+  const fetchEventReviews = useCallback(async (eventId: string): Promise<Review[]> => {
+    const { data } = await supabase
+      .from("reviews")
+      .select("id, event_id, rating, comment, author_name, reply, created_at")
+      .eq("event_id", eventId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    return (data ?? []).map(mapReview);
+  }, []);
+
+  const fetchOrganizerReviews = useCallback(async (): Promise<Review[]> => {
+    if (!myOrganizerId) return [];
+    const { data } = await supabase
+      .from("reviews")
+      .select("id, event_id, rating, comment, author_name, reply, created_at")
+      .eq("organizer_id", myOrganizerId)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    return (data ?? []).map(mapReview);
+  }, [myOrganizerId]);
+
+  const submitReview = useCallback(
+    async (eventId: string, rating: number, comment: string): Promise<Result> => {
+      const { error } = await supabase.rpc("submit_review", { p_event_id: eventId, p_rating: rating, p_comment: comment.trim() || null });
+      if (error) {
+        const map: Record<string, string> = {
+          event_not_started: "Podrás calificarlo cuando el evento empiece.",
+          no_ticket: "Solo pueden calificar quienes tienen entrada de este evento.",
+          invalid_rating: "Elige de 1 a 5 estrellas.",
+        };
+        const key = Object.keys(map).find((k) => error.message.includes(k));
+        return { ok: false, reason: key ? map[key] : "No se pudo enviar tu reseña." };
+      }
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const replyToReview = useCallback(async (reviewId: string, reply: string): Promise<Result> => {
+    const { error } = await supabase.rpc("reply_review", { p_review_id: reviewId, p_reply: reply.trim() });
+    if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo enviar tu respuesta.") };
+    return { ok: true };
+  }, []);
+
+  // Seguidores y calificación propios (para el resumen del organizador).
+  useEffect(() => {
+    if (!myOrganizerId) return;
+    supabase.rpc("organizer_followers", { p_organizer_id: myOrganizerId }).then(({ data }) => setFollowerCount(Number(data ?? 0)));
+    supabase
+      .from("organizer_ratings")
+      .select("rating_avg, rating_count")
+      .eq("organizer_id", myOrganizerId)
+      .maybeSingle()
+      .then(({ data }) => setRatingSummary(data ? { avg: Number((data as any).rating_avg), count: Number((data as any).rating_count) } : { avg: null, count: 0 }));
+  }, [myOrganizerId, events]);
+
   const markNotificationsRead = useCallback(
     async (ids?: string[]) => {
       if (!userId) return;
@@ -1515,6 +1642,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead,
       staff,
       staffAssignments,
+      followedOrganizers,
+      toggleFollow,
+      followerCount,
+      ratingSummary,
+      fetchEventReviews,
+      fetchOrganizerReviews,
+      submitReview,
+      replyToReview,
       coupons,
       createCoupon,
       setCouponActive,
@@ -1580,6 +1715,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead,
       staff,
       staffAssignments,
+      followedOrganizers,
+      toggleFollow,
+      followerCount,
+      ratingSummary,
+      fetchEventReviews,
+      fetchOrganizerReviews,
+      submitReview,
+      replyToReview,
       coupons,
       createCoupon,
       setCouponActive,

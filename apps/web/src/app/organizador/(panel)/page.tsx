@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { requireOrganizer } from "@/lib/org/session";
-import { eventNames, loadBalance, loadEvents, loadOrders, loadTickets, loadViews, pendingRelease, ticketTypeNames } from "@/lib/org/data";
+import { eventNames, loadBalance, loadEvents, loadFollowers, loadOrders, loadReviews, loadTickets, loadViews, pendingRelease, ticketTypeNames } from "@/lib/org/data";
 import {
   attendance,
   buyerStats,
@@ -31,7 +31,8 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
 
   const events = await loadEvents(organizer.id);
   const eventIds = events.map((e) => e.id);
-  const [orders, tickets, balance, views] = await Promise.all([loadOrders(eventIds), loadTickets(eventIds), loadBalance(organizer.id), loadViews(eventIds, range)]);
+  const [orders, tickets, balance, views, followers, reviews] = await Promise.all([loadOrders(eventIds), loadTickets(eventIds), loadBalance(organizer.id), loadViews(eventIds, range), loadFollowers(organizer.id), loadReviews(organizer.id)]);
+  const ratingAvg = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : null;
 
   const now = new Date();
   const cur = totalsBetween(orders, new Date(now.getTime() - range * DAY), new Date(now.getTime() + 1));
@@ -86,10 +87,11 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
         <StatCard label="Pedido promedio" value={usd(avgOrder)} hint="antes de comisión" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Conversión de pedidos" value={pct(fun.conversion)} hint={`${fun.paid} pagados de ${fun.total - fun.pending} resueltos`} />
         <StatCard label="Asistencia" value={att.issued > 0 ? pct(att.rate) : "—"} hint={att.issued > 0 ? `${att.used} de ${att.issued} en eventos finalizados` : "aún no hay eventos finalizados"} />
         <StatCard label="Visitas a tus eventos" value={String(rangeViews)} hint={viewRate === null ? "aún sin visitas" : `${pct(viewRate)} compró`} />
+        <StatCard label="Seguidores" value={String(followers)} hint={ratingAvg === null ? "sin reseñas aún" : `★ ${ratingAvg.toFixed(1)} · ${reviews.length} ${reviews.length === 1 ? "reseña" : "reseñas"}`} />
         <StatCard label="Compradores" value={String(buyers.buyers)} hint={`${pct(buyers.repeatRate)} han vuelto a comprar`} />
         <StatCard label="Eventos activos" value={String(events.filter((e) => ["published", "sold_out", "live"].includes(e.status)).length)} hint={`${events.length} en total`} />
       </div>

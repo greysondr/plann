@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { LayoutDashboard, CalendarDays, Receipt, Wallet, Users, Settings, LogOut, Ticket, GitCompareArrows, FileBarChart } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Receipt, Wallet, Users, Settings, LogOut, Ticket, GitCompareArrows, FileBarChart, Star } from "lucide-react";
 import { signOut } from "@/app/organizador/actions";
 
 const NAV = [
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/organizador/eventos", label: "Eventos", icon: CalendarDays },
   { href: "/organizador/ventas", label: "Ventas", icon: Receipt },
   { href: "/organizador/comparar", label: "Comparar eventos", icon: GitCompareArrows },
+  { href: "/organizador/resenas", label: "Reseñas", icon: Star },
   { href: "/organizador/cupones", label: "Cupones", icon: Ticket },
   { href: "/organizador/finanzas", label: "Finanzas", icon: Wallet },
   { href: "/organizador/reportes", label: "Reportes", icon: FileBarChart },
