@@ -12,6 +12,8 @@ import { useAppStore, useEvent } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { formatEventDate, formatShortDate } from "../../../src/utils/format";
 import { fromCalendarDateString, toCalendarDateString } from "../../../src/utils/eventFilters";
+import { EventPhotoField } from "../../../src/components/EventPhotoField";
+import { LocationPicker, type LatLng } from "../../../src/components/LocationPicker";
 import { TicketDraftEditor, draftToTicket, newDraft, type TicketDraft } from "../../../src/components/TicketTypesForm";
 import type { TicketType } from "../../../src/core/types";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
@@ -136,13 +138,18 @@ export default function EditarEventoScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useEvent(id);
-  const { updateEvent, publishEvent, setSalesPaused, cancelEvent, organizerOrders } = useAppStore();
+  const { updateEvent, publishEvent, setSalesPaused, cancelEvent, organizerOrders, categories, cities } = useAppStore();
 
   const original = event ? new Date(event.startsAt) : null;
   const originalSlot = original ? TIME_SLOTS.findIndex((s) => s.hour === original.getHours() && s.minute === original.getMinutes()) : -1;
 
   const [title, setTitle] = useState(event?.title ?? "");
   const [venueName, setVenueName] = useState(event?.venueName ?? "");
+  const [venueAddress, setVenueAddress] = useState(event?.meetingPoint ?? "");
+  const [point, setPoint] = useState<LatLng | null>(event ? { lat: event.lat, lng: event.lng } : null);
+  const [category, setCategory] = useState<string | undefined>(event?.category);
+  const [city, setCity] = useState<string | undefined>(event?.city);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [description, setDescription] = useState(event?.description ?? "");
   const [date, setDate] = useState<string | null>(original ? toCalendarDateString(original) : null);
   const [slotIndex, setSlotIndex] = useState<number | null>(originalSlot >= 0 ? originalSlot : null);
@@ -178,8 +185,15 @@ export default function EditarEventoScreen() {
       title: title.trim(),
       description: description.trim(),
       venueName: venueName.trim(),
+      venueAddress: venueAddress.trim(),
+      lat: point?.lat,
+      lng: point?.lng,
+      category,
+      city,
       startsAt: startsAt.toISOString(),
+      imageUri: imageUri ?? undefined,
     });
+    if (result.ok) setImageUri(null);
     setSaving(false);
     setMessage(result.ok ? { text: "Cambios guardados.", error: false } : { text: result.reason ?? "No se pudo guardar.", error: true });
   }
@@ -240,10 +254,34 @@ export default function EditarEventoScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Detalles</Text>
-            <Text style={styles.smallLabel}>Nombre</Text>
+            <Text style={styles.smallLabel}>Foto</Text>
+            <EventPhotoField uri={imageUri} current={event.imageUrl || undefined} onPick={setImageUri} />
+            <Text style={[styles.smallLabel, { marginTop: 14 }]}>Nombre</Text>
             <TextInput value={title} onChangeText={setTitle} style={styles.input} placeholderTextColor={color.text4} />
+            <Text style={[styles.smallLabel, { marginTop: 12 }]}>Categoría</Text>
+            <View style={styles.chipsWrap}>
+              {categories.filter((c) => c !== "Todos").map((c) => (
+                <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(c)} />
+              ))}
+            </View>
+            <Text style={[styles.smallLabel, { marginTop: 12 }]}>Ciudad</Text>
+            <View style={styles.chipsWrap}>
+              {cities.map((c) => (
+                <Chip key={c} label={c} selected={city === c} onPress={() => setCity(c)} />
+              ))}
+            </View>
             <Text style={[styles.smallLabel, { marginTop: 12 }]}>Lugar</Text>
             <TextInput value={venueName} onChangeText={setVenueName} style={styles.input} placeholderTextColor={color.text4} />
+            <TextInput
+              value={venueAddress}
+              onChangeText={setVenueAddress}
+              placeholder="Dirección o punto de referencia (opcional)"
+              placeholderTextColor={color.text4}
+              style={[styles.input, { marginTop: 10 }]}
+            />
+            <View style={{ marginTop: 12 }}>
+              <LocationPicker value={point} onChange={setPoint} />
+            </View>
             <Text style={[styles.smallLabel, { marginTop: 12 }]}>Descripción</Text>
             <TextInput
               value={description}

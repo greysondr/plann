@@ -6,6 +6,7 @@ import { Logo } from "../../src/components/Logo";
 import { Chip } from "../../src/components/Chip";
 import { EventHeroCard, EventListCard } from "../../src/components/EventCard";
 import { SearchIcon } from "../../src/components/icons";
+import { NotificationBell } from "../../src/components/NotificationBell";
 import { useAppStore } from "../../src/context/AppStore";
 import { color, fontFamily, spacing } from "../../src/theme/tokens";
 
@@ -32,7 +33,10 @@ export default function HomeScreen() {
     >
       <View style={styles.header}>
         <Logo />
-        <Text style={styles.city}>Barquisimeto, Lara</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <Text style={styles.city}>Barquisimeto, Lara</Text>
+          <NotificationBell />
+        </View>
       </View>
 
       <Pressable style={styles.searchBar} onPress={() => router.push("/buscar")}>

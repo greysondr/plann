@@ -5,6 +5,7 @@ import { GlassCard } from "../../../src/components/GlassCard";
 import { Chip } from "../../../src/components/Chip";
 import { AreaChart, BarList, ColumnChart } from "../../../src/components/charts";
 import { OrganizerHeader } from "../../../src/components/OrganizerHeader";
+import { NotificationBell } from "../../../src/components/NotificationBell";
 import { useAppStore } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { formatEventDate, formatShortDate } from "../../../src/utils/format";
@@ -108,8 +109,9 @@ export default function OrganizadorScreen() {
     <View style={{ flex: 1 }}>
       <OrganizerHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 150 }}>
-      <View style={styles.section}>
+      <View style={[styles.section, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
         <Text style={styles.pageTitle}>Resumen</Text>
+        <NotificationBell />
       </View>
 
       <View style={[styles.section, styles.quickRow]}>

@@ -4,7 +4,8 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Calendar } from "react-native-calendars";
 import "../../src/utils/calendarLocale";
-import * as ImagePicker from "expo-image-picker";
+import { EventPhotoField } from "../../src/components/EventPhotoField";
+import { LocationPicker, type LatLng } from "../../src/components/LocationPicker";
 import { GlassCard } from "../../src/components/GlassCard";
 import { Chip } from "../../src/components/Chip";
 import { PrimaryButton } from "../../src/components/Button";
@@ -36,6 +37,8 @@ export default function CrearEventoScreen() {
   const [category, setCategory] = useState<string | null>(null);
   const [city, setCity] = useState("Barquisimeto");
   const [venueName, setVenueName] = useState("");
+  const [venueAddress, setVenueAddress] = useState("");
+  const [point, setPoint] = useState<LatLng | null>(null);
   const [description, setDescription] = useState("");
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [slotIndex, setSlotIndex] = useState<number | null>(null);
@@ -54,23 +57,6 @@ export default function CrearEventoScreen() {
     slotIndex !== null &&
     tickets !== null;
 
-  async function handlePickImage() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Necesitamos acceso a tus fotos", "Actívalo desde Ajustes para poder elegir una imagen.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setImageUri(result.assets[0].uri);
-    }
-  }
-
   async function handleSubmit() {
     if (!canSubmit || !category || !customDate || slotIndex === null) return;
     const slot = TIME_SLOTS[slotIndex];
@@ -83,6 +69,9 @@ export default function CrearEventoScreen() {
       category,
       city,
       venueName: venueName.trim(),
+      venueAddress: venueAddress.trim(),
+      lat: point?.lat,
+      lng: point?.lng,
       description: description.trim() || "Sin descripción por ahora.",
       startsAt: date.toISOString(),
       durationMinutes: 180,
@@ -121,30 +110,7 @@ export default function CrearEventoScreen() {
 
       <View style={styles.section}>
         <Text style={styles.label}>Foto del evento</Text>
-        <Pressable style={styles.photoBox} onPress={handlePickImage}>
-          {imageUri ? (
-            <>
-              <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-              <View style={styles.photoBadge}>
-                <Text style={styles.photoBadgeText}>Así se ve en la app</Text>
-              </View>
-            </>
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Text style={styles.photoPlaceholderTitle}>Toca para elegir una foto</Text>
-              <Text style={styles.photoPlaceholderHint}>Horizontal, 1600 × 900 px (16:9)</Text>
-            </View>
-          )}
-        </Pressable>
-        {imageUri && (
-          <Pressable onPress={handlePickImage} style={{ marginTop: 10 }}>
-            <Text style={styles.changePhotoLink}>Cambiar foto</Text>
-          </Pressable>
-        )}
-        <Text style={styles.hint}>
-          Recomendado: 1600 × 900 px o más, horizontal (relación 16:9). Es exactamente el recorte que usan la
-          portada del evento y las tarjetas en Buscar, así que lo que ves arriba es lo que va a ver la gente.
-        </Text>
+        <EventPhotoField uri={imageUri} onPick={setImageUri} />
       </View>
 
       <View style={styles.section}>
@@ -174,6 +140,16 @@ export default function CrearEventoScreen() {
           placeholderTextColor={color.text4}
           style={styles.input}
         />
+        <TextInput
+          value={venueAddress}
+          onChangeText={setVenueAddress}
+          placeholder="Dirección o punto de referencia (opcional)"
+          placeholderTextColor={color.text4}
+          style={[styles.input, { marginTop: 10 }]}
+        />
+        <View style={{ marginTop: 12 }}>
+          <LocationPicker value={point} onChange={setPoint} />
+        </View>
       </View>
 
       <View style={styles.section}>

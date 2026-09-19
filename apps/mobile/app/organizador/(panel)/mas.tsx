@@ -28,7 +28,7 @@ const Divider = () => <View style={styles.divider} />;
 export default function MasScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { balance, staff, events, myOrganizerId, organizerProfile, signOut } = useAppStore();
+  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount } = useAppStore();
   if (!allowed) return null;
 
   const active = events.filter((e) => e.organizerId === myOrganizerId && ["published", "sold_out", "live"].includes(e.status ?? "")).length;
@@ -70,6 +70,8 @@ export default function MasScreen() {
         <View style={styles.section}>
           <Text style={styles.groupTitle}>Cuenta</Text>
           <GlassCard level="card">
+            <Row label="Notificaciones" hint={unreadCount > 0 ? `${unreadCount} sin leer` : "Ventas, cupos, retiros y más"} onPress={() => router.push("/notificaciones")} />
+            <Divider />
             <Row label="Cambiar a modo comprador" hint="Explora y compra entradas" onPress={() => {
                 setLastMode("buyer");
                 router.replace("/");

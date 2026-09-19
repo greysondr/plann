@@ -24,7 +24,7 @@ function Row({ label, value, onPress }: { label: string; value?: string; onPress
 export default function PerfilScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { favorites, orders, points, tier, organizerStatus, staffAssignments, userEmail, signOut } = useAppStore();
+  const { favorites, orders, points, tier, organizerStatus, staffAssignments, userEmail, signOut, unreadCount } = useAppStore();
 
   const soon = (label: string) => () => Alert.alert(label, "Todavía no está listo en este prototipo.");
   const initials = (userEmail ?? "PL").slice(0, 2).toUpperCase();
@@ -110,7 +110,7 @@ export default function PerfilScreen() {
           <Divider />
           <Row label="Invitar amigos" value="+$1 de saldo" onPress={soon("Invitar amigos")} />
           <Divider />
-          <Row label="Notificaciones" onPress={soon("Notificaciones")} />
+          <Row label="Notificaciones" value={unreadCount > 0 ? `${unreadCount} ${unreadCount === 1 ? "nueva" : "nuevas"}` : undefined} onPress={() => router.push("/notificaciones")} />
           <Divider />
           <Row label="Ayuda y soporte" onPress={soon("Ayuda y soporte")} />
         </GlassCard>

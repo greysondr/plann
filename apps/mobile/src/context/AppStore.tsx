@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
-import { cancelEventReminder, scheduleEventReminder } from "../lib/notifications";
+import { cancelEventReminder, presentLocalNotification, registerPushToken, scheduleEventReminder } from "../lib/notifications";
 import { FIRST_PURCHASE_BONUS, getTierForPoints, type LoyaltyTier } from "../core/loyalty";
 import type { OrderRow, TicketRow } from "../core/orgAnalytics";
 import type {
@@ -121,7 +121,13 @@ export interface EventEditInput {
   title: string;
   description: string;
   venueName: string;
+  venueAddress?: string;
+  lat?: number;
+  lng?: number;
+  category?: string;
+  city?: string;
   startsAt: string;
+  imageUri?: string;
 }
 
 type Result = { ok: boolean; reason?: string };
@@ -130,6 +136,16 @@ export interface NewTicketInput {
   name: string;
   priceCents: number; // 0 = gratis
   quantity: number;
+}
+
+export interface AppNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, any>;
+  readAt?: string;
+  createdAt: string;
 }
 
 export interface StaffMember {
@@ -158,6 +174,9 @@ export interface NewEventInput {
   category: string;
   city: string;
   venueName: string;
+  venueAddress?: string;
+  lat?: number;
+  lng?: number;
   description: string;
   startsAt: string;
   durationMinutes: number;
@@ -186,6 +205,9 @@ interface AppStoreValue {
   withdrawals: Withdrawal[];
   analyticsOrders: OrderRow[];
   analyticsTickets: TicketRow[];
+  notifications: AppNotification[];
+  unreadCount: number;
+  markNotificationsRead: (ids?: string[]) => Promise<void>;
   staff: StaffMember[];
   staffAssignments: StaffAssignment[];
 
@@ -248,6 +270,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [analyticsOrders, setAnalyticsOrders] = useState<OrderRow[]>([]);
   const [analyticsTickets, setAnalyticsTickets] = useState<TicketRow[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
@@ -497,6 +520,27 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     setAnalyticsTickets(ticketRows as TicketRow[]);
   }, []);
 
+  // --- Bandeja de notificaciones (las crean disparadores en la base de datos) ---
+  const fetchNotifications = useCallback(async (uid: string) => {
+    const { data } = await supabase
+      .from("notifications")
+      .select("id, type, title, body, data, read_at, created_at")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    setNotifications(
+      (data ?? []).map((r: any) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        body: r.body,
+        data: r.data ?? {},
+        readAt: r.read_at ?? undefined,
+        createdAt: r.created_at,
+      }))
+    );
+  }, []);
+
   // --- Equipo de puerta: los que yo agregué (si soy organizador) y los
   // organizadores para los que yo hago puerta.
   const fetchStaff = useCallback(async (uid: string, organizerId: string | null) => {
@@ -594,6 +638,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setOrganizerProfile(null);
         setMyOrganizerId(null);
         setOrganizerOrders([]);
+        setNotifications([]);
         setAnalyticsOrders([]);
         setAnalyticsTickets([]);
         setStaff([]);
@@ -681,6 +726,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (userId) fetchStaff(userId, myOrganizerId);
   }, [userId, myOrganizerId, fetchStaff]);
+
+  // Notificaciones: carga inicial, token de push y aviso en vivo cuando llega una nueva.
+  useEffect(() => {
+    if (!userId) return;
+    fetchNotifications(userId);
+    registerPushToken(userId);
+    const channel = supabase
+      .channel(`plann-notifications-${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` }, (payload) => {
+        const n: any = payload.new;
+        fetchNotifications(userId);
+        presentLocalNotification({ title: n.title, body: n.body, data: { ...(n.data ?? {}), notification_id: n.id } });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, fetchNotifications]);
 
   useEffect(() => {
     if (!userId) return;
@@ -908,6 +971,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           description: input.description,
           city_id: cityId,
           venue_name: input.venueName,
+          venue_address: input.venueAddress || null,
+          venue_lat: input.lat ?? null,
+          venue_lng: input.lng ?? null,
           images: imageUrl ? [imageUrl] : [],
           starts_at: input.startsAt,
           ends_at: endsAt,
@@ -994,6 +1060,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     [myOrganizerId, fetchEvents]
   );
 
+  const markNotificationsRead = useCallback(
+    async (ids?: string[]) => {
+      if (!userId) return;
+      const now = new Date().toISOString();
+      setNotifications((list) => list.map((n) => (!n.readAt && (!ids || ids.includes(n.id)) ? { ...n, readAt: now } : n)));
+      let query = supabase.from("notifications").update({ read_at: now }).eq("user_id", userId).is("read_at", null);
+      if (ids) query = query.in("id", ids);
+      await query;
+    },
+    [userId]
+  );
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
+
   const updateOrganizerProfile = useCallback(
     async (input: OrganizerProfileInput): Promise<Result> => {
       if (!myOrganizerId || !userId) return { ok: false };
@@ -1021,16 +1101,26 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateEvent = useCallback(
     async (eventId: string, input: EventEditInput): Promise<Result> => {
-      const { error } = await supabase
-        .from("events")
-        .update({
-          title: input.title,
-          description: input.description,
-          venue_name: input.venueName,
-          starts_at: input.startsAt,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", eventId);
+      const update: Record<string, unknown> = {
+        title: input.title,
+        description: input.description,
+        venue_name: input.venueName,
+        venue_address: input.venueAddress || null,
+        starts_at: input.startsAt,
+        updated_at: new Date().toISOString(),
+      };
+      if (input.lat !== undefined && input.lng !== undefined) {
+        update.venue_lat = input.lat;
+        update.venue_lng = input.lng;
+      }
+      if (input.category) update.category_id = categoryIdByName.current.get(input.category) ?? null;
+      if (input.city) update.city_id = cityIdByName.current.get(input.city) ?? null;
+      if (input.imageUri && myOrganizerId) {
+        const url = await uploadEventImage(input.imageUri, myOrganizerId);
+        if (!url) return { ok: false, reason: "No se pudo subir la foto. Intenta de nuevo." };
+        update.images = [url];
+      }
+      const { error } = await supabase.from("events").update(update).eq("id", eventId);
       if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar. Intenta de nuevo.") };
       await fetchEvents(myOrganizerId);
       return { ok: true };
@@ -1189,6 +1279,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       withdrawals,
       analyticsOrders,
       analyticsTickets,
+      notifications,
+      unreadCount,
+      markNotificationsRead,
       staff,
       staffAssignments,
       rateApplied,
@@ -1240,6 +1333,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       withdrawals,
       analyticsOrders,
       analyticsTickets,
+      notifications,
+      unreadCount,
+      markNotificationsRead,
       staff,
       staffAssignments,
       rateApplied,

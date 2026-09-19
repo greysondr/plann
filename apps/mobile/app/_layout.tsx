@@ -2,6 +2,7 @@ import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-ro
 import { StatusBar } from "expo-status-bar";
 import * as Font from "expo-font";
 import { useEffect, useRef, useState } from "react";
+import * as Notifications from "expo-notifications";
 import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -24,6 +25,20 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const router = useRouter();
   const restored = useRef(false);
+
+  // Tocar un aviso (con la app abierta, en segundo plano o cerrada) abre la
+  // pantalla que trae en data.route.
+  const lastResponse = Notifications.useLastNotificationResponse();
+  const handledResponse = useRef<string | null>(null);
+  useEffect(() => {
+    if (loading || !isSignedIn || !lastResponse) return;
+    const id = lastResponse.notification.request.identifier;
+    if (handledResponse.current === id) return;
+    handledResponse.current = id;
+    const route = lastResponse.notification.request.content.data?.route;
+    if (typeof route === "string" && route.startsWith("/")) router.push(route as never);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, isSignedIn, lastResponse]);
 
   // Un organizador que cerró la app en su panel la vuelve a abrir ahí. Solo al
   // arrancar y solo si cae en el inicio: un enlace profundo no se pisa.
@@ -113,6 +128,7 @@ export default function RootLayout() {
                 <Stack.Screen name="puerta" />
                 <Stack.Screen name="organizador/editar/[id]" />
                 <Stack.Screen name="organizador/asistentes/[id]" />
+                <Stack.Screen name="notificaciones" />
                 <Stack.Screen name="perfil/nivel" />
                 <Stack.Screen name="perfil/historial" />
               </Stack>
