@@ -4,7 +4,9 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Calendar } from "react-native-calendars";
 import "../../src/utils/calendarLocale";
-import { EventPhotoField } from "../../src/components/EventPhotoField";
+import { EventPhotosField } from "../../src/components/EventPhotosField";
+import { PublishScheduleField } from "../../src/components/PublishScheduleField";
+import { scheduleToIso, type PublishSchedule } from "../../src/core/publishSchedule";
 import { LocationPicker, type LatLng } from "../../src/components/LocationPicker";
 import { GlassCard } from "../../src/components/GlassCard";
 import { Chip } from "../../src/components/Chip";
@@ -33,7 +35,8 @@ export default function CrearEventoScreen() {
   const eventCategories = categories.filter((c) => c !== "Todos");
 
   const [title, setTitle] = useState("");
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [schedule, setSchedule] = useState<PublishSchedule>({ mode: "now", day: "", hourIndex: 0 });
   const [category, setCategory] = useState<string | null>(null);
   const [city, setCity] = useState("Barquisimeto");
   const [venueName, setVenueName] = useState("");
@@ -55,7 +58,8 @@ export default function CrearEventoScreen() {
     venueName.trim().length > 1 &&
     !!customDate &&
     slotIndex !== null &&
-    tickets !== null;
+    tickets !== null &&
+    (schedule.mode === "now" || !!schedule.day);
 
   async function handleSubmit() {
     if (!canSubmit || !category || !customDate || slotIndex === null) return;
@@ -76,7 +80,8 @@ export default function CrearEventoScreen() {
       startsAt: date.toISOString(),
       durationMinutes: 180,
       tickets: tickets!,
-      imageUri: imageUri ?? undefined,
+      images: photos,
+      publishAt: scheduleToIso(schedule),
     });
     if (!ok) {
       setSubmitted(false);
@@ -109,8 +114,8 @@ export default function CrearEventoScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Foto del evento</Text>
-        <EventPhotoField uri={imageUri} onPick={setImageUri} />
+        <Text style={styles.label}>Fotos del evento</Text>
+        <EventPhotosField photos={photos} onChange={setPhotos} />
       </View>
 
       <View style={styles.section}>
@@ -218,6 +223,11 @@ export default function CrearEventoScreen() {
         {drafts.length > 1 && tickets === null && (
           <Text style={styles.hint}>Cada entrada necesita nombre distinto, precio (vacío si es gratis) y cupo.</Text>
         )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.label}>Publicación</Text>
+        <PublishScheduleField value={schedule} onChange={setSchedule} />
       </View>
 
       <View style={styles.section}>

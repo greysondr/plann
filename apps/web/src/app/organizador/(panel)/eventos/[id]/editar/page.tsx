@@ -67,7 +67,9 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
             description: event.description,
             venue_name: event.venue_name,
             starts_at: event.starts_at,
-            image: event.images[0],
+            images: event.images,
+            publish_at: event.publish_at,
+            status: event.status,
             category_id: categoryId,
             city_id: cityId,
           }}

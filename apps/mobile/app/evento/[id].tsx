@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EventImage } from "../../src/components/EventImage";
@@ -27,11 +27,14 @@ export default function EventDetailScreen() {
   const event = useEvent(id);
   const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer } = useAppStore();
   const [quantity, setQuantity] = useState(1);
+  const { width } = useWindowDimensions();
+  const [photoIndex, setPhotoIndex] = useState(0);
 
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const ticketType = event?.ticketTypes.find((t) => t.id === selectedTypeId) ?? (event ? defaultTicketType(event.ticketTypes) : undefined);
   const organizer = event ? getOrganizer(event.organizerId) : undefined;
 
+  const photos = event?.images && event.images.length > 0 ? event.images : event?.imageUrl ? [event.imageUrl] : [];
   const state = ticketType ? saleState(ticketType) : "sold_out";
   // Fuera de la ventana de venta no hay nada que comprar, aunque sobre cupo.
   const available = ticketType && state === "on_sale" ? remaining(ticketType) : 0;
@@ -73,7 +76,28 @@ export default function EventDetailScreen() {
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ paddingBottom: event.sourceCurated ? 60 : 140 }} showsVerticalScrollIndicator={false}>
         <View style={styles.gallery}>
-          <EventImage uri={event.imageUrl} label={event.imageLabel} style={StyleSheet.absoluteFill} />
+          {photos.length > 1 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              style={StyleSheet.absoluteFill}
+              onMomentumScrollEnd={(e) => setPhotoIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+            >
+              {photos.map((uri) => (
+                <EventImage key={uri} uri={uri} label={event.imageLabel} style={{ width, height: 260 }} />
+              ))}
+            </ScrollView>
+          ) : (
+            <EventImage uri={event.imageUrl} label={event.imageLabel} style={StyleSheet.absoluteFill} />
+          )}
+          {photos.length > 1 && (
+            <View style={styles.dots} pointerEvents="none">
+              {photos.map((uri, i) => (
+                <View key={uri} style={[styles.dot, i === photoIndex && styles.dotActive]} />
+              ))}
+            </View>
+          )}
           <View style={[styles.galleryTop, { top: insets.top + 10 }]}>
             <Pressable style={styles.circleButton} onPress={() => router.back()}>
               <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -306,6 +330,9 @@ const styles = StyleSheet.create({
   gallery: {
     height: 260,
   },
+  dots: { position: "absolute", bottom: 12, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
+  dotActive: { width: 18, backgroundColor: color.white },
   galleryTop: {
     position: "absolute",
     left: spacing.screenX,

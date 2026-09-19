@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { createCouponAction, issueCompAction, sendAnnouncementAction } from "@/app/organizador/(panel)/actions";
+import { createCouponAction, issueCompAction, repeatEventAction, sendAnnouncementAction } from "@/app/organizador/(panel)/actions";
 import type { FormState } from "@/app/organizador/actions";
 import { Button } from "@/components/ui";
 import { Message } from "@/components/org/Forms";
@@ -95,6 +95,29 @@ export function AnnouncementForm({ eventId, recipients }: { eventId: string; rec
       <Message state={state} />
       <Button type="submit" disabled={pending || recipients === 0}>
         {pending ? "Enviando..." : `Enviar a ${recipients} ${recipients === 1 ? "persona" : "personas"}`}
+      </Button>
+    </form>
+  );
+}
+
+export function RepeatForm({ eventId }: { eventId: string }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(repeatEventAction.bind(null, eventId), {});
+  return (
+    <form action={action} className="space-y-3">
+      <p className="text-[12.5px] leading-relaxed text-foreground-3">
+        Crea copias como borrador, con las mismas entradas y sin ventas. Las revisas y publicas cuando quieras.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <select name="interval" defaultValue="7" className={inputClass}>
+          <option value="7">Cada semana</option>
+          <option value="14">Cada 2 semanas</option>
+          <option value="30">Cada mes (30 días)</option>
+        </select>
+        <input name="count" type="number" min={1} max={12} defaultValue={4} className={inputClass} aria-label="Número de copias" />
+      </div>
+      <Message state={state} />
+      <Button type="submit" disabled={pending}>
+        {pending ? "Creando..." : "Crear copias"}
       </Button>
     </form>
   );

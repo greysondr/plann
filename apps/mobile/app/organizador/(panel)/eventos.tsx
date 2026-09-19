@@ -8,7 +8,7 @@ import { PrimaryButton } from "../../../src/components/Button";
 import { useAppStore } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { sumBy } from "../../../src/core/orgAnalytics";
-import { formatEventDate } from "../../../src/utils/format";
+import { formatEventDate, formatShortDate } from "../../../src/utils/format";
 import { formatUsd } from "../../../src/core/pricing";
 import { color, fontFamily, spacing } from "../../../src/theme/tokens";
 
@@ -33,9 +33,13 @@ const STATUS_LABEL: Record<string, string> = {
 export default function EventosScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { events, myOrganizerId, analyticsOrders, duplicateEvent, publishEvent } = useAppStore();
+  const { events, myOrganizerId, analyticsOrders, duplicateEvent, publishEvent, repeatEvent } = useAppStore();
   const [tab, setTab] = useState("proximos");
   const [busy, setBusy] = useState<string | null>(null);
+  const [repeatFor, setRepeatFor] = useState<string | null>(null);
+  const [interval, setIntervalDays] = useState(7);
+  const [copies, setCopies] = useState(4);
+  const [repeatMsg, setRepeatMsg] = useState<string | null>(null);
 
   const mine = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
   const revenue = useMemo(() => new Map(sumBy(analyticsOrders, (o) => o.event_id, new Map()).map((s) => [s.id, s.netCents])), [analyticsOrders]);
@@ -58,6 +62,19 @@ export default function EventosScreen() {
     const result = await duplicateEvent(id);
     setBusy(null);
     if (result.ok && result.eventId) router.push(`/organizador/editar/${result.eventId}`);
+  }
+
+  async function handleRepeat(id: string) {
+    setBusy(id);
+    setRepeatMsg(null);
+    const result = await repeatEvent(id, copies, interval, false);
+    setBusy(null);
+    if (result.ok) {
+      setRepeatFor(null);
+      setTab("borradores");
+    } else {
+      setRepeatMsg(result.reason ?? "No se pudieron crear las copias.");
+    }
   }
 
   async function handlePublish(id: string) {
@@ -106,7 +123,13 @@ export default function EventosScreen() {
                         {event.title}
                       </Text>
                       <Text style={styles.meta}>{formatEventDate(event.startsAt)}</Text>
-                      <Text style={styles.status}>{event.salesPaused && !closed ? "Ventas pausadas" : STATUS_LABEL[event.status ?? ""] ?? event.status}</Text>
+                      <Text style={styles.status}>
+                        {event.status === "draft" && event.publishAt
+                          ? `Programado · sale el ${formatShortDate(event.publishAt)}`
+                          : event.salesPaused && !closed
+                            ? "Ventas pausadas"
+                            : STATUS_LABEL[event.status ?? ""] ?? event.status}
+                      </Text>
                     </View>
                     <Text style={styles.revenue}>{formatUsd(revenue.get(event.id) ?? 0)}</Text>
                   </Pressable>
@@ -141,7 +164,32 @@ export default function EventosScreen() {
                     <Pressable style={styles.chip} disabled={busy === event.id} onPress={() => handleDuplicate(event.id)}>
                       <Text style={styles.chipText}>Duplicar</Text>
                     </Pressable>
+                    <Pressable style={styles.chip} onPress={() => { setRepeatFor(repeatFor === event.id ? null : event.id); setRepeatMsg(null); }}>
+                      <Text style={styles.chipText}>Repetir</Text>
+                    </Pressable>
                   </View>
+                  {repeatFor === event.id && (
+                    <View style={styles.repeatBox}>
+                      <Text style={styles.meta}>Crea copias como borrador, con las mismas entradas y sin ventas. Las revisas y publicas.</Text>
+                      <View style={styles.actions}>
+                        {[{ d: 7, l: "Cada semana" }, { d: 14, l: "Cada 2 semanas" }, { d: 30, l: "Cada mes" }].map((o) => (
+                          <Chip key={o.d} label={o.l} selected={interval === o.d} onPress={() => setIntervalDays(o.d)} />
+                        ))}
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                        <Text style={styles.meta}>Copias</Text>
+                        <Pressable style={styles.stepBtn} onPress={() => setCopies((c) => Math.max(1, c - 1))}>
+                          <Text style={styles.stepText}>−</Text>
+                        </Pressable>
+                        <Text style={styles.stepValue}>{copies}</Text>
+                        <Pressable style={styles.stepBtn} onPress={() => setCopies((c) => Math.min(12, c + 1))}>
+                          <Text style={styles.stepText}>+</Text>
+                        </Pressable>
+                      </View>
+                      {repeatMsg && <Text style={[styles.meta, { color: color.pink }]}>{repeatMsg}</Text>}
+                      <PrimaryButton label={`Crear ${copies} ${copies === 1 ? "copia" : "copias"}`} loading={busy === event.id} onPress={() => handleRepeat(event.id)} />
+                    </View>
+                  )}
                 </View>
               </GlassCard>
             );
@@ -170,6 +218,10 @@ const styles = StyleSheet.create({
   revenue: { fontFamily: fontFamily.extraBold, fontSize: 13, color: color.pink },
   progressTrack: { height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.10)", overflow: "hidden" },
   progressFill: { height: 6, backgroundColor: color.pink },
+  repeatBox: { gap: 10, marginTop: 4, paddingTop: 12, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" },
+  stepBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  stepText: { fontFamily: fontFamily.bold, fontSize: 18, color: color.text },
+  stepValue: { fontFamily: fontFamily.extraBold, fontSize: 16, color: color.text, minWidth: 22, textAlign: "center" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" },
   chipPrimary: { backgroundColor: color.pink, borderColor: color.pink },

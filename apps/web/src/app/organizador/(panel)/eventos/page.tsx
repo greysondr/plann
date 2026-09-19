@@ -75,7 +75,7 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
                       <Link href={`/organizador/eventos/${e.id}`} className="truncate text-[15px] font-extrabold text-foreground hover:text-pink">
                         {e.title}
                       </Link>
-                      <EventStatusBadge status={e.status} paused={e.sales_paused} />
+                      <EventStatusBadge status={e.status} paused={e.sales_paused} scheduled={!!e.publish_at} />
                     </div>
                     <p className="text-[12.5px] text-foreground-3">
                       {longDateTime(e.starts_at)} · {e.venue_name}

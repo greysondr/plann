@@ -8,7 +8,7 @@ import { Button, Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, 
 import { AreaTrend, ColumnChart, Donut } from "@/components/org/charts";
 import { EventStatusBadge, OrderStatusBadge, ProgressBar } from "@/components/org/bits";
 import { AttendeesTable } from "@/components/org/Tables";
-import { AnnouncementForm, CompForm } from "@/components/org/EventEngage";
+import { AnnouncementForm, CompForm, RepeatForm } from "@/components/org/EventEngage";
 import { duplicateEventAction, setSalesPausedAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -160,6 +160,13 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           </Card>
         </div>
       )}
+
+      <Card>
+        <CardHeader title="Repetir este evento" subtitle="Para eventos que se hacen cada semana o cada mes" />
+        <div className="p-5">
+          <RepeatForm eventId={event.id} />
+        </div>
+      </Card>
 
       <Card>
         <CardHeader title="Pedidos del evento" />

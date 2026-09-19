@@ -40,7 +40,8 @@ const EVENT_STATUS: Record<string, { label: string; tone: "neutral" | "pink" | "
   cancelled: { label: "Cancelado", tone: "danger" },
 };
 
-export function EventStatusBadge({ status, paused }: { status: string; paused?: boolean }) {
+export function EventStatusBadge({ status, paused, scheduled }: { status: string; paused?: boolean; scheduled?: boolean }) {
+  if (status === "draft" && scheduled) return <Badge tone="warning">Programado</Badge>;
   if (paused && status !== "cancelled" && status !== "finished") return <Badge tone="warning">Ventas pausadas</Badge>;
   const s = EVENT_STATUS[status] ?? { label: status, tone: "neutral" as const };
   return <Badge tone={s.tone}>{s.label}</Badge>;

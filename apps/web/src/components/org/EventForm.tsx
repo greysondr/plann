@@ -31,68 +31,102 @@ export function toVeInput(iso: string): string {
   return new Date(new Date(iso).getTime() - 4 * 3600 * 1000).toISOString().slice(0, 16);
 }
 
-function ImageField({ current }: { current?: string }) {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
+const MAX_PHOTOS = 5;
 
-  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) {
-      setPreview(null);
-      setNote(null);
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setNote({ text: "Pesa más de 5 MB. Usa una foto más liviana.", ok: false });
+// Galería del evento: hasta 5 fotos 16:9; la primera es la portada. Las que ya están guardadas se
+// conservan (y se pueden reordenar o quitar); las nuevas se eligen de una vez con el selector.
+function PhotosField({ initial }: { initial: string[] }) {
+  const [existing, setExisting] = useState<string[]>(initial);
+  const [previews, setPreviews] = useState<{ url: string; note: string; ok: boolean }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  const room = MAX_PHOTOS - existing.length;
+
+  function onFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    setError(null);
+    setPreviews([]);
+    if (files.length === 0) return;
+    if (files.length > room) {
+      setError(`Solo caben ${room} foto${room === 1 ? "" : "s"} más (máximo ${MAX_PHOTOS}).`);
       e.target.value = "";
-      setPreview(null);
       return;
     }
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const ratio = img.width / img.height;
-      if (img.width < 1600 || img.height < 900) {
-        setNote({ text: `Tu foto mide ${img.width} × ${img.height} px. Se verá borrosa: usa una de al menos 1600 × 900.`, ok: false });
-      } else if (Math.abs(ratio - 16 / 9) > 0.15) {
-        setNote({ text: "No es horizontal 16:9: la app la recorta al centro. Revisa la vista previa.", ok: false });
-      } else {
-        setNote({ text: `${img.width} × ${img.height} px. Tamaño ideal.`, ok: true });
-      }
-    };
-    img.src = url;
-    setPreview(url);
+    if (files.some((f) => f.size > 5 * 1024 * 1024)) {
+      setError("Alguna foto pesa más de 5 MB. Usa fotos más livianas.");
+      e.target.value = "";
+      return;
+    }
+    files.forEach((file) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const ratio = img.width / img.height;
+        const small = img.width < 1600 || img.height < 900;
+        const off = Math.abs(ratio - 16 / 9) > 0.15;
+        const note = small ? `${img.width} × ${img.height}: se verá borrosa` : off ? "No es 16:9: se recorta al centro" : `${img.width} × ${img.height} · ideal`;
+        setPreviews((p) => [...p, { url, note, ok: !small && !off }]);
+      };
+      img.src = url;
+    });
   }
 
-  const shown = preview ?? current;
+  function makeCover(i: number) {
+    setExisting((list) => [list[i], ...list.filter((_, j) => j !== i)]);
+  }
+
   return (
     <div>
-      <label className={labelClass}>Foto del evento</label>
-      <div className="flex flex-wrap items-start gap-5">
-        <div className="w-full max-w-[380px]">
-          <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border-strong bg-surface-muted">
-            {shown ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={shown} alt="Vista previa" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-[12.5px] text-foreground-3">Sin foto todavía</div>
-            )}
+      <label className={labelClass}>Fotos del evento</label>
+      <input type="hidden" name="existing_images" value={JSON.stringify(existing)} />
+      <div className="flex flex-wrap gap-3">
+        {existing.map((url, i) => (
+          <div key={url} className="w-[190px]">
+            <div className="relative aspect-video overflow-hidden rounded-xl border border-border-strong bg-surface-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt={`Foto ${i + 1}`} className="h-full w-full object-cover" />
+              {i === 0 && <span className="absolute left-2 top-2 rounded-full bg-pink px-2 py-0.5 text-[10.5px] font-bold text-white">Portada</span>}
+            </div>
+            <div className="mt-1.5 flex gap-3 text-[12px] font-bold">
+              {i > 0 && (
+                <button type="button" onClick={() => makeCover(i)} className="text-pink">
+                  Hacer portada
+                </button>
+              )}
+              <button type="button" onClick={() => setExisting((l) => l.filter((_, j) => j !== i))} className="text-foreground-3 hover:text-danger">
+                Quitar
+              </button>
+            </div>
           </div>
-          <p className="mt-2 text-[12px] text-foreground-3">Así se ve en la app: horizontal, recortada a 16:9.</p>
-        </div>
-        <div className="min-w-[220px] flex-1 space-y-2">
-          <input
-            name="image"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={onChange}
-            className="block w-full text-[13px] text-foreground-2 file:mr-3 file:rounded-full file:border-0 file:bg-pink-soft file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-pink"
-          />
-          <p className="text-[12px] leading-relaxed text-foreground-3">
-            Recomendado: <span className="font-bold">1600 × 900 px</span> (16:9), JPG, PNG o WebP, máximo 5 MB.
-          </p>
-          {note && <p className={`text-[12.5px] font-semibold ${note.ok ? "text-success-ink" : "text-warning"}`}>{note.text}</p>}
-        </div>
+        ))}
+        {previews.map((p) => (
+          <div key={p.url} className="w-[190px]">
+            <div className="relative aspect-video overflow-hidden rounded-xl border border-pink/50 bg-surface-muted">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.url} alt="Foto nueva" className="h-full w-full object-cover" />
+              <span className="absolute left-2 top-2 rounded-full bg-foreground px-2 py-0.5 text-[10.5px] font-bold text-white">Nueva</span>
+            </div>
+            <p className={`mt-1.5 text-[11.5px] font-semibold ${p.ok ? "text-success-ink" : "text-warning"}`}>{p.note}</p>
+          </div>
+        ))}
+        {existing.length === 0 && previews.length === 0 && (
+          <div className="flex aspect-video w-[190px] items-center justify-center rounded-xl border border-dashed border-border-strong text-[12.5px] text-foreground-3">Sin fotos todavía</div>
+        )}
+      </div>
+      <div className="mt-3 space-y-1.5">
+        <input
+          name="images"
+          type="file"
+          multiple
+          disabled={room <= 0}
+          accept="image/jpeg,image/png,image/webp"
+          onChange={onFiles}
+          className="block w-full text-[13px] text-foreground-2 file:mr-3 file:rounded-full file:border-0 file:bg-pink-soft file:px-4 file:py-2 file:text-[13px] file:font-bold file:text-pink disabled:opacity-50"
+        />
+        {error && <p className="text-[12.5px] font-semibold text-danger">{error}</p>}
+        <p className="text-[12px] leading-relaxed text-foreground-3">
+          Hasta {MAX_PHOTOS} fotos horizontales de <span className="font-bold">1600 × 900 px</span> (16:9), JPG, PNG o WebP, máx. 5 MB cada una. La portada es la primera: es la que se ve en Buscar y en las tarjetas.
+        </p>
       </div>
     </div>
   );
@@ -159,7 +193,7 @@ export function EventForm({
   mode: "create" | "edit";
   categories: Option[];
   cities: Option[];
-  event?: { id: string; title: string; description: string | null; venue_name: string | null; starts_at: string; image?: string; category_id: string | null; city_id: string | null };
+  event?: { id: string; title: string; description: string | null; venue_name: string | null; starts_at: string; publish_at?: string | null; status?: string; images?: string[]; category_id: string | null; city_id: string | null };
 }) {
   const action = mode === "create" ? createEventAction : updateEventAction.bind(null, event!.id);
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, {});
@@ -183,7 +217,7 @@ export function EventForm({
 
   return (
     <form action={formAction} className="space-y-6">
-      <ImageField current={event?.image} />
+      <PhotosField initial={event?.images ?? []} />
 
       <div>
         <label className={labelClass}>Nombre del evento</label>
@@ -230,6 +264,14 @@ export function EventForm({
           </div>
         )}
       </div>
+
+      {(mode === "create" || event?.status === "draft") && (
+        <div>
+          <label className={labelClass}>Publicación (hora de Venezuela)</label>
+          <input name="publish_at" type="datetime-local" defaultValue={event?.publish_at ? toVeInput(event.publish_at) : ""} className={inputClass} />
+          <p className="mt-1.5 text-[12px] text-foreground-3">Déjalo vacío para publicar ahora. Si eliges una fecha, queda como borrador y se publica solo a esa hora.</p>
+        </div>
+      )}
 
       <div>
         <label className={labelClass}>Descripción</label>

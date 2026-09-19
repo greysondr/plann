@@ -40,6 +40,8 @@ export interface EventItem {
   city: string;
   imageLabel: string;
   imageUrl: string;
+  images?: string[]; // galería completa; la primera es la portada
+  publishAt?: string; // borrador con publicación programada
   description: string;
   whatIncludes?: string[];
   venueName: string;

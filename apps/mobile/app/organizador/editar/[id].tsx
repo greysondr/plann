@@ -12,7 +12,9 @@ import { useAppStore, useEvent } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { formatEventDate, formatShortDate } from "../../../src/utils/format";
 import { fromCalendarDateString, toCalendarDateString } from "../../../src/utils/eventFilters";
-import { EventPhotoField } from "../../../src/components/EventPhotoField";
+import { EventPhotosField } from "../../../src/components/EventPhotosField";
+import { PublishScheduleField } from "../../../src/components/PublishScheduleField";
+import { isoToSchedule, scheduleToIso, type PublishSchedule } from "../../../src/core/publishSchedule";
 import { LocationPicker, type LatLng } from "../../../src/components/LocationPicker";
 import { DayField } from "../../../src/components/DayField";
 import { dayEndIso, dayStartIso, isoToVeDay } from "../../../src/core/ticketSales";
@@ -163,7 +165,8 @@ export default function EditarEventoScreen() {
   const [point, setPoint] = useState<LatLng | null>(event ? { lat: event.lat, lng: event.lng } : null);
   const [category, setCategory] = useState<string | undefined>(event?.category);
   const [city, setCity] = useState<string | undefined>(event?.city);
-  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<string[]>(event?.images ?? (event?.imageUrl ? [event.imageUrl] : []));
+  const [schedule, setSchedule] = useState<PublishSchedule>(isoToSchedule(event?.publishAt));
   const [description, setDescription] = useState(event?.description ?? "");
   const [date, setDate] = useState<string | null>(original ? toCalendarDateString(original) : null);
   const [slotIndex, setSlotIndex] = useState<number | null>(originalSlot >= 0 ? originalSlot : null);
@@ -205,9 +208,9 @@ export default function EditarEventoScreen() {
       category,
       city,
       startsAt: startsAt.toISOString(),
-      imageUri: imageUri ?? undefined,
+      images: photos,
+      publishAt: event!.status === "draft" ? scheduleToIso(schedule) ?? null : undefined,
     });
-    if (result.ok) setImageUri(null);
     setSaving(false);
     setMessage(result.ok ? { text: "Cambios guardados.", error: false } : { text: result.reason ?? "No se pudo guardar.", error: true });
   }
@@ -255,8 +258,10 @@ export default function EditarEventoScreen() {
               <GlassCard level="card">
                 <View style={{ padding: 14, gap: 10 }}>
                   <Text style={styles.ticketName}>Borrador</Text>
-                  <Text style={styles.hint}>Este evento todavía no es visible en la app. Revisa los detalles y publícalo cuando esté listo.</Text>
-                  <PrimaryButton label="Publicar evento" onPress={() => publishEvent(event.id)} />
+                  <Text style={styles.hint}>Este evento todavía no es visible en la app. Publícalo ahora o prográmalo.</Text>
+                  <PublishScheduleField value={schedule} onChange={setSchedule} />
+                  <Text style={styles.hint}>Para programar, elige la fecha y toca «Guardar cambios» más abajo.</Text>
+                  <PrimaryButton label="Publicar ahora" onPress={() => publishEvent(event.id)} />
                 </View>
               </GlassCard>
             </View>
@@ -268,8 +273,8 @@ export default function EditarEventoScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Detalles</Text>
-            <Text style={styles.smallLabel}>Foto</Text>
-            <EventPhotoField uri={imageUri} current={event.imageUrl || undefined} onPick={setImageUri} />
+            <Text style={styles.smallLabel}>Fotos</Text>
+            <EventPhotosField photos={photos} onChange={setPhotos} />
             <Text style={[styles.smallLabel, { marginTop: 14 }]}>Nombre</Text>
             <TextInput value={title} onChangeText={setTitle} style={styles.input} placeholderTextColor={color.text4} />
             <Text style={[styles.smallLabel, { marginTop: 12 }]}>Categoría</Text>

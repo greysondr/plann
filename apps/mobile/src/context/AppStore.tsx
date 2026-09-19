@@ -65,6 +65,8 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
   sales_paused: "El organizador pausó las ventas de este evento.",
+  invalid_count: "Puedes crear de 1 a 12 copias.",
+  invalid_interval: "El intervalo entre copias no es válido.",
   sales_not_started: "La venta de esta entrada todavía no empieza.",
   sales_ended: "La venta de esta entrada ya terminó.",
   ticket_sales_window_valid: "La fecha de cierre debe ser posterior a la de apertura.",
@@ -136,7 +138,8 @@ export interface EventEditInput {
   category?: string;
   city?: string;
   startsAt: string;
-  imageUri?: string;
+  images?: string[]; // lista final ordenada: urls ya subidas + uris locales nuevas (se suben aquí)
+  publishAt?: string | null;
 }
 
 type Result = { ok: boolean; reason?: string };
@@ -214,7 +217,8 @@ export interface NewEventInput {
   startsAt: string;
   durationMinutes: number;
   tickets: NewTicketInput[];
-  imageUri?: string; // uri local (file://...) elegida con expo-image-picker
+  images?: string[]; // uris locales (file://...) elegidas con expo-image-picker; la primera es la portada
+  publishAt?: string; // ISO: si viene, el evento queda en borrador y se publica solo a esa hora
 }
 
 interface AppStoreValue {
@@ -268,6 +272,7 @@ interface AppStoreValue {
   createEvent: (input: NewEventInput) => Promise<boolean>;
   updateEvent: (eventId: string, input: EventEditInput) => Promise<Result>;
   publishEvent: (eventId: string) => Promise<Result>;
+  repeatEvent: (eventId: string, count: number, intervalDays: number, publish: boolean) => Promise<Result>;
   duplicateEvent: (eventId: string) => Promise<{ ok: boolean; eventId?: string; reason?: string }>;
   updateOrganizerProfile: (input: OrganizerProfileInput) => Promise<Result>;
   updateTicketType: (ticketTypeId: string, name: string, priceCents: number, quantity: number, window?: { salesStart: string | null; salesEnd: string | null }) => Promise<Result>;
@@ -376,6 +381,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       city: row.cities?.name ?? "Barquisimeto",
       imageLabel: `Foto: ${row.title}`,
       imageUrl: images[0] ?? "",
+      images,
+      publishAt: row.publish_at ?? undefined,
       description: row.description ?? "",
       venueName: row.venue_name ?? "",
       meetingPoint: row.venue_address ?? undefined,
@@ -1040,6 +1047,29 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Las fotos que ya son url (https) se dejan; las locales (file://) se suben.
+  async function resolveImages(list: string[], organizerId: string): Promise<string[]> {
+    const out: string[] = [];
+    for (const item of list) {
+      if (item.startsWith("http")) out.push(item);
+      else {
+        const url = await uploadEventImage(item, organizerId);
+        if (url) out.push(url);
+      }
+    }
+    return out;
+  }
+
+  const repeatEvent = useCallback(
+    async (eventId: string, count: number, intervalDays: number, publish: boolean): Promise<Result> => {
+      const { error } = await supabase.rpc("repeat_event", { p_event_id: eventId, p_count: count, p_interval_days: intervalDays, p_publish: publish });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudieron crear las copias.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
   const createEvent = useCallback(
     async (input: NewEventInput): Promise<boolean> => {
       if (!myOrganizerId) return false;
@@ -1047,7 +1077,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       const cityId = cityIdByName.current.get(input.city) ?? cityIdByName.current.get("Barquisimeto") ?? null;
       const endsAt = new Date(new Date(input.startsAt).getTime() + input.durationMinutes * 60000).toISOString();
 
-      const imageUrl = input.imageUri ? await uploadEventImage(input.imageUri, myOrganizerId) : null;
+      const imageUrls = await resolveImages(input.images ?? [], myOrganizerId);
 
       const { data: eventRow, error } = await supabase
         .from("events")
@@ -1063,10 +1093,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           venue_address: input.venueAddress || null,
           venue_lat: input.lat ?? null,
           venue_lng: input.lng ?? null,
-          images: imageUrl ? [imageUrl] : [],
+          images: imageUrls,
           starts_at: input.startsAt,
           ends_at: endsAt,
-          status: "published",
+          status: input.publishAt ? "draft" : "published",
+          publish_at: input.publishAt ?? null,
           refund_policy: "24h",
           min_age: 0,
           source: "organizer",
@@ -1269,11 +1300,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }
       if (input.category) update.category_id = categoryIdByName.current.get(input.category) ?? null;
       if (input.city) update.city_id = cityIdByName.current.get(input.city) ?? null;
-      if (input.imageUri && myOrganizerId) {
-        const url = await uploadEventImage(input.imageUri, myOrganizerId);
-        if (!url) return { ok: false, reason: "No se pudo subir la foto. Intenta de nuevo." };
-        update.images = [url];
+      if (input.images && myOrganizerId) {
+        const urls = await resolveImages(input.images, myOrganizerId);
+        if (urls.length !== input.images.length) return { ok: false, reason: "No se pudo subir una de las fotos. Intenta de nuevo." };
+        update.images = urls;
       }
+      if (input.publishAt !== undefined) update.publish_at = input.publishAt;
       const { error } = await supabase.from("events").update(update).eq("id", eventId);
       if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar. Intenta de nuevo.") };
       await fetchEvents(myOrganizerId);
@@ -1468,6 +1500,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       updateEvent,
       publishEvent,
       duplicateEvent,
+      repeatEvent,
       updateOrganizerProfile,
       updateTicketType,
       addTicketType,
@@ -1529,6 +1562,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       updateEvent,
       publishEvent,
       duplicateEvent,
+      repeatEvent,
       updateOrganizerProfile,
       updateTicketType,
       addTicketType,

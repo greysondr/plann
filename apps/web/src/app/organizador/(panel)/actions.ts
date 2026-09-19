@@ -55,6 +55,40 @@ async function uploadImage(file: File, organizerId: string, prefix = ""): Promis
   return { url: supabase.storage.from("event-images").getPublicUrl(path).data.publicUrl };
 }
 
+const MAX_PHOTOS = 5;
+
+// Fotos finales del evento: las ya guardadas que se conservan (en el orden elegido) + las nuevas subidas.
+async function collectImages(formData: FormData, organizerId: string, fallback: string[] = []): Promise<{ urls?: string[]; error?: string }> {
+  let kept: string[] = fallback;
+  const rawExisting = formData.get("existing_images");
+  if (typeof rawExisting === "string") {
+    try {
+      const parsed = JSON.parse(rawExisting);
+      if (Array.isArray(parsed)) kept = parsed.filter((u): u is string => typeof u === "string" && u.startsWith("http"));
+    } catch {
+      // se conserva el fallback
+    }
+  }
+  const files = formData.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  if (kept.length + files.length > MAX_PHOTOS) return { error: `Máximo ${MAX_PHOTOS} fotos por evento.` };
+  const uploaded: string[] = [];
+  for (const file of files) {
+    const r = await uploadImage(file, organizerId);
+    if (r.error) return { error: r.error };
+    if (r.url) uploaded.push(r.url);
+  }
+  return { urls: [...kept, ...uploaded] };
+}
+
+// datetime-local (sin zona) -> ISO en hora de Venezuela; vacío = null.
+function parsePublishAt(value: FormDataEntryValue | null): string | null | "invalid" {
+  const s = String(value ?? "");
+  if (!s) return null;
+  const iso = parseVeDate(value);
+  if (!iso) return "invalid";
+  return iso;
+}
+
 export interface TicketInput {
   id?: string;
   name: string;
@@ -142,13 +176,11 @@ export async function createEventAction(_prev: FormState, formData: FormData): P
   const durationHours = Math.min(24, Math.max(1, Number(formData.get("duration_hours")) || 3));
   const ends_at = new Date(new Date(fields.starts_at).getTime() + durationHours * 3600 * 1000).toISOString();
 
-  let imageUrl: string | null = null;
-  const file = formData.get("image");
-  if (file instanceof File && file.size > 0) {
-    const uploaded = await uploadImage(file, organizer.id);
-    if (uploaded.error) return { error: uploaded.error };
-    imageUrl = uploaded.url ?? null;
-  }
+  const collected = await collectImages(formData, organizer.id);
+  if (collected.error) return { error: collected.error };
+  const publishAt = parsePublishAt(formData.get("publish_at"));
+  if (publishAt === "invalid") return { error: "La fecha de publicación no es válida." };
+  if (publishAt && new Date(publishAt).getTime() > new Date(fields.starts_at).getTime()) return { error: "La publicación debe ser antes del evento." };
 
   const supabase = await supabaseServer();
   const { data: event, error } = await supabase
@@ -157,9 +189,10 @@ export async function createEventAction(_prev: FormState, formData: FormData): P
       organizer_id: organizer.id,
       slug: `${slugify(fields.title)}-${Date.now().toString(36)}`,
       kind: "event",
-      images: imageUrl ? [imageUrl] : [],
+      images: collected.urls ?? [],
       ends_at,
-      status: "published",
+      status: publishAt && new Date(publishAt).getTime() > Date.now() ? "draft" : "published",
+      publish_at: publishAt && new Date(publishAt).getTime() > Date.now() ? publishAt : null,
       refund_policy: "24h",
       min_age: 0,
       source: "organizer",
@@ -184,11 +217,13 @@ export async function updateEventAction(eventId: string, _prev: FormState, formD
   if (typeof fields === "string") return { error: fields };
 
   const update: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
-  const file = formData.get("image");
-  if (file instanceof File && file.size > 0) {
-    const uploaded = await uploadImage(file, organizer.id);
-    if (uploaded.error) return { error: uploaded.error };
-    update.images = [uploaded.url];
+  const collected = await collectImages(formData, organizer.id);
+  if (collected.error) return { error: collected.error };
+  update.images = collected.urls ?? [];
+  if (formData.has("publish_at")) {
+    const publishAt = parsePublishAt(formData.get("publish_at"));
+    if (publishAt === "invalid") return { error: "La fecha de publicación no es válida." };
+    update.publish_at = publishAt;
   }
 
   const supabase = await supabaseServer();
@@ -254,6 +289,19 @@ export async function duplicateEventAction(eventId: string): Promise<void> {
   }
   revalidatePath("/organizador", "layout");
   redirect(`/organizador/eventos/${copy.id}/editar`);
+}
+
+export async function repeatEventAction(eventId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const count = Math.round(Number(formData.get("count")));
+  const interval = Math.round(Number(formData.get("interval")));
+  if (!Number.isInteger(count) || count < 1 || count > 12) return { error: "Puedes crear de 1 a 12 copias." };
+  if (!Number.isInteger(interval) || interval < 1) return { error: "Elige cada cuánto se repite." };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("repeat_event", { p_event_id: eventId, p_count: count, p_interval_days: interval, p_publish: false });
+  if (error) return { error: dbError(error.message, "No pudimos crear las copias.") };
+  revalidatePath("/organizador", "layout");
+  return { ok: `Listo: ${count} ${count === 1 ? "copia creada" : "copias creadas"} como borrador. Las encuentras en Eventos > Borradores.` };
 }
 
 export async function cancelEventAction(eventId: string, _prev: FormState, formData: FormData): Promise<FormState> {
