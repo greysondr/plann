@@ -101,7 +101,7 @@ export function RemoveStaff({ id }: { id: string }) {
 export function ProfileForm({
   organizer,
 }: {
-  organizer: { name: string; bio: string | null; contact_phone: string | null; logo_url: string | null; payout_method: string | null; payout_account: string | null; birthday_pct?: number };
+  organizer: { name: string; bio: string | null; contact_phone: string | null; logo_url: string | null; payout_method: string | null; payout_account: string | null};
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(updateProfileAction, {});
   const [m, setM] = useState(organizer.payout_method ?? "pago_movil");
@@ -126,16 +126,6 @@ export function ProfileForm({
       <div>
         <label className={labelClass}>Teléfono de contacto</label>
         <input name="contact_phone" defaultValue={organizer.contact_phone ?? ""} placeholder="0414-0000000" className={inputClass} />
-      </div>
-      <div>
-        <label className={labelClass}>Descuento de cumpleaños</label>
-        <select name="birthday_pct" defaultValue={String(organizer.birthday_pct ?? 0)} className={inputClass}>
-          <option value="0">Sin descuento</option>
-          {[10, 15, 20, 30].map((p) => (
-            <option key={p} value={p}>{p}% para quien cumple años (3 días antes y después)</option>
-          ))}
-        </select>
-        <p className="mt-1 text-[12px] text-foreground-3">Se aplica solo en todos tus eventos; lo absorbes tú y no se suma a cupones ni a ofertas (rige el mayor).</p>
       </div>
       <div>
         <label className={labelClass}>Cuenta para recibir tus pagos</label>

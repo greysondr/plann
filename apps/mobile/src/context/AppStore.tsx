@@ -114,7 +114,6 @@ export interface OrganizerProfile {
   rejectionReason?: string;
   payoutMethod?: PaymentMethod;
   payoutAccount?: string;
-  birthdayPct: number;
 }
 
 export interface OrganizerProfileInput {
@@ -343,7 +342,6 @@ interface AppStoreValue {
   cancelGift: (ticketId: string) => Promise<Result>;
   setLastMinute: (ticketTypeId: string, pct: number | null, hours: number | null) => Promise<Result>;
   setEventCommunity: (eventId: string, value: boolean) => Promise<Result>;
-  setBirthdayPct: (pct: number) => Promise<Result>;
   submitPaymentReference: (orderId: string, method: PaymentMethod, reference: string, bank?: string) => Promise<{ ok: boolean; reason?: string }>;
   checkIn: (code: string, eventId?: string) => Promise<{ status: "valid" | "used" | "invalid"; attendeeName?: string; checkedInAt?: string }>;
   toggleFavorite: (eventId: string) => Promise<void>;
@@ -564,7 +562,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         rejectionReason: data.rejection_reason ?? undefined,
         payoutMethod: (data.payout_method as PaymentMethod) ?? undefined,
         payoutAccount: data.payout_account ?? undefined,
-        birthdayPct: Number(data.birthday_pct ?? 0),
       });
     } else {
       setMyOrganizerId(null);
@@ -1158,17 +1155,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       return { ok: true };
     },
     [myOrganizerId, fetchEvents]
-  );
-
-  const setBirthdayPct = useCallback(
-    async (pct: number): Promise<Result> => {
-      if (!myOrganizerId || !userId) return { ok: false };
-      const { error } = await supabase.from("organizers").update({ birthday_pct: pct }).eq("id", myOrganizerId);
-      if (error) return { ok: false, reason: "No se pudo guardar el descuento." };
-      await fetchMyOrganizer(userId);
-      return { ok: true };
-    },
-    [myOrganizerId, userId, fetchMyOrganizer]
   );
 
   const submitPaymentReference = useCallback(
@@ -1901,7 +1887,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       cancelGift,
       setLastMinute,
       setEventCommunity,
-      setBirthdayPct,
       submitPaymentReference,
       checkIn,
       toggleFavorite,
@@ -1991,7 +1976,6 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       cancelGift,
       setLastMinute,
       setEventCommunity,
-      setBirthdayPct,
       submitPaymentReference,
       checkIn,
       toggleFavorite,

@@ -428,7 +428,6 @@ export async function updateProfileAction(_prev: FormState, formData: FormData):
     name,
     bio: String(formData.get("bio") ?? "").trim() || null,
     contact_phone: String(formData.get("contact_phone") ?? "").trim() || null,
-    birthday_pct: [0, 10, 15, 20, 30].includes(Number(formData.get("birthday_pct"))) ? Number(formData.get("birthday_pct")) : 0,
     updated_at: new Date().toISOString(),
   };
   if (["pago_movil", "transfer", "zelle"].includes(method)) {

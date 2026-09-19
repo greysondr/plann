@@ -47,7 +47,7 @@ export default function CumpleanosScreen() {
       </View>
       <View style={styles.section}>
         <Text style={styles.hint}>
-          Los organizadores que quieran pueden darte un descuento automático los 3 días antes y después de tu cumpleaños. Solo tú ves tu fecha.
+          Plann te regala 10% de descuento (hasta $5) en una compra durante los 3 días antes y después de tu cumpleaños, una vez al año. Solo tú ves tu fecha.
         </Text>
         <View style={styles.row}>
           <TextInput value={day} onChangeText={(t) => setDay(t.replace(/\D/g, "").slice(0, 2))} placeholder="Día" placeholderTextColor={color.text4} keyboardType="number-pad" style={[styles.input, { flex: 1 }]} />

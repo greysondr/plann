@@ -11,13 +11,13 @@ Migración: `20260920000000_retention_features.sql`.
 - Cron cada 10 min (`notify-last-minute`) avisa una sola vez a quienes vigilan el precio y a los seguidores del organizador.
 - La rebaja la absorbe el organizador (igual que un cupón: fee y comisión van sobre lo rebajado).
 
-## Cumpleaños
-- El comprador guarda su fecha en Perfil > Mi cumpleaños (solo él la ve). El organizador elige `organizers.birthday_pct` (0/10/15/20/30).
-- Ventana: 3 días antes y después, en hora de Venezuela. Cron diario a las 8 a. m. avisa el día del cumpleaños si hay eventos con descuento.
-- Se decidió que lo pague el organizador (opt-in), no Plann, para no tocar la liquidación.
+## Cumpleaños (lo paga Plann)
+- El comprador guarda su fecha en Perfil > Mi cumpleaños (solo él la ve). Plann le regala 10 % (tope $5) en una compra durante los 3 días antes y después (hora de Venezuela), una vez al año (`20260920010000_birthday_paid_by_plann.sql`).
+- El organizador no pierde nada: comisión y neto se calculan sobre el precio completo y la diferencia se guarda en `orders.plann_subsidy_cents` para contabilidad. Cifra de referencia: el costo máximo para Plann es $5 por comprador al año.
+- Cron diario a las 8 a. m. avisa el día del cumpleaños. Se quitó `organizers.birthday_pct` y su selector en app y web.
 
 ## Reglas de descuento
-`create_order` aplica el **mayor** entre cupón, última hora y cumpleaños; no se suman. Si gana la oferta automática el cupón no se consume. `orders.discount_kind` guarda cuál se usó. `quote_auto_offer` deja que la app muestre el mismo precio que cobrará el servidor.
+`create_order` aplica el **mayor** entre cupón, última hora y cumpleaños; no se suman (el regalo de cumpleaños de Plann incluido). Si gana la oferta automática el cupón no se consume. `orders.discount_kind` guarda cuál se usó. `quote_auto_offer` deja que la app muestre el mismo precio que cobrará el servidor.
 
 ## Gratis y comunitarios
 `events.is_community` (lo marca el organizador, app y web). La portada tiene la sección «Gratis y comunitarios» (gratis por precio o marcados comunitarios) y «Ofertas de última hora».
@@ -28,4 +28,5 @@ Migración: `20260920000000_retention_features.sql`.
 
 ## Pendiente
 - Push no probado en dispositivo físico; las pantallas nuevas de la app compilan y sus RPC se probaron por SQL, pero no se recorrieron en el simulador.
+- Reembolsar una compra con regalo de cumpleaños: el saldo del organizador se revierte completo, pero el comprador pagó $5 menos; hay que definir a quién corresponde la diferencia.
 - Un reembolso de la orden original anula también una entrada ya regalada.
