@@ -11,6 +11,8 @@ export interface TicketTypeRow {
   reserved: number;
   sales_start: string | null;
   sales_end: string | null;
+  last_minute_pct: number | null;
+  last_minute_hours: number | null;
 }
 
 export interface EventRow {
@@ -26,6 +28,7 @@ export interface EventRow {
   venue_name: string | null;
   sales_paused: boolean;
   cancelled_reason: string | null;
+  is_community: boolean;
   ticket_types: TicketTypeRow[];
   categories: { name: string } | null;
   cities: { name: string } | null;
@@ -68,7 +71,7 @@ async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ da
 }
 
 const EVENT_COLUMNS =
-  "id, title, slug, status, starts_at, ends_at, images, publish_at, description, venue_name, sales_paused, cancelled_reason, ticket_types(id, name, price_cents, quantity, sold, reserved, sales_start, sales_end), categories(name), cities(name)";
+  "id, title, slug, status, starts_at, ends_at, images, publish_at, description, venue_name, sales_paused, cancelled_reason, is_community, ticket_types(id, name, price_cents, quantity, sold, reserved, sales_start, sales_end, last_minute_pct, last_minute_hours), categories(name), cities(name)";
 
 export async function loadEvents(organizerId: string): Promise<EventRow[]> {
   const supabase = await supabaseServer();

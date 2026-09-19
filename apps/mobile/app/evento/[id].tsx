@@ -27,7 +27,8 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(id);
-  const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer, recordEventView, followedOrganizers, toggleFollow, tickets, fetchEventReviews, myOrganizerId } = useAppStore();
+  const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer, recordEventView, followedOrganizers, toggleFollow, tickets, fetchEventReviews, myOrganizerId, quoteAutoOffer, alerts, toggleAlert, userEmail } = useAppStore();
+  const [autoOffer, setAutoOffer] = useState<{ kind: string | null; discountCents: number; label?: string }>({ kind: null, discountCents: 0 });
   const [reviews, setReviews] = useState<Review[]>([]);
   useEffect(() => {
     if (id) fetchEventReviews(id).then(setReviews);
@@ -51,6 +52,14 @@ export default function EventDetailScreen() {
   const finished = event?.status === "finished";
   const available = ticketType && state === "on_sale" && !finished ? remaining(ticketType) : 0;
 
+  useEffect(() => {
+    if (!ticketType || ticketType.priceCents === 0 || !userEmail) {
+      setAutoOffer({ kind: null, discountCents: 0 });
+      return;
+    }
+    quoteAutoOffer(ticketType.id, quantity).then(setAutoOffer);
+  }, [ticketType?.id, ticketType?.priceCents, ticketType?.lastMinutePct, quantity, userEmail, quoteAutoOffer]);
+
   const totals = useMemo(() => {
     if (!ticketType) return null;
     return calculateOrderTotals({
@@ -58,8 +67,9 @@ export default function EventDetailScreen() {
       quantity,
       commissionRate: 0,
       rateUsed: rateApplied,
+      discountCents: autoOffer.discountCents,
     });
-  }, [ticketType, quantity, rateApplied]);
+  }, [ticketType, quantity, rateApplied, autoOffer.discountCents]);
 
   if (!event) {
     return (
@@ -340,6 +350,35 @@ export default function EventDetailScreen() {
                     </Pressable>
                   </View>
                 </GlassCard>
+
+                {autoOffer.kind && (
+                  <View style={styles.offerBox}>
+                    <Text style={styles.offerTitle}>{autoOffer.label}</Text>
+                    <Text style={styles.offerHint}>Ya está aplicado: pagas {formatUsd(autoOffer.discountCents)} menos.</Text>
+                  </View>
+                )}
+                {!autoOffer.kind && ticketType.lastMinutePct && ticketType.lastMinuteHours ? (
+                  <Text style={[styles.ticketAvailability, { marginTop: 8 }]}>
+                    Oferta de última hora: {ticketType.lastMinutePct}% menos desde {ticketType.lastMinuteHours} h antes del evento.
+                  </Text>
+                ) : null}
+                {userEmail && !finished && event.status !== "cancelled" && (
+                  <>
+                    {event.ticketTypes.every((t) => remaining(t) <= 0) ? (
+                      <Pressable style={styles.alertButton} onPress={() => toggleAlert(event.id, "waitlist")}>
+                        <Text style={styles.alertButtonText}>
+                          {alerts.some((a) => a.eventId === event.id && a.kind === "waitlist") ? "En lista de espera · toca para salir" : "Avisarme si se libera un cupo"}
+                        </Text>
+                      </Pressable>
+                    ) : ticketType.priceCents > 0 ? (
+                      <Pressable style={styles.alertButton} onPress={() => toggleAlert(event.id, "price")}>
+                        <Text style={styles.alertButtonText}>
+                          {alerts.some((a) => a.eventId === event.id && a.kind === "price") ? "Alerta de precio activa · toca para quitar" : "Avisarme si baja el precio o hay oferta"}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                )}
               </>
             )
           )}
@@ -382,6 +421,11 @@ export default function EventDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  offerBox: { marginTop: 10, padding: 14, borderRadius: radius.cardLarge, backgroundColor: "rgba(233,65,127,0.10)", borderWidth: 1, borderColor: "rgba(233,65,127,0.30)", gap: 2 },
+  offerTitle: { fontFamily: fontFamily.extraBold, fontSize: 14, color: color.text },
+  offerHint: { fontFamily: fontFamily.regular, fontSize: 12.5, color: color.text2 },
+  alertButton: { marginTop: 10, paddingVertical: 12, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", alignItems: "center" },
+  alertButtonText: { fontFamily: fontFamily.bold, fontSize: 13.5, color: color.text },
   typeOption: {
     flexDirection: "row",
     alignItems: "center",

@@ -70,6 +70,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
             images: event.images,
             publish_at: event.publish_at,
             status: event.status,
+            is_community: event.is_community,
             category_id: categoryId,
             city_id: cityId,
           }}

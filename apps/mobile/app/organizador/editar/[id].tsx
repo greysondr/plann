@@ -367,6 +367,16 @@ export default function EditarEventoScreen() {
           </View>
 
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ofertas y comunidad</Text>
+            <GlassCard level="card">
+              <Pressable style={{ padding: 16 }} onPress={() => router.push(`/organizador/ofertas/${event.id}`)}>
+                <Text style={{ fontFamily: fontFamily.bold, fontSize: 14.5, color: color.text }}>Oferta de última hora y evento comunitario</Text>
+                <Text style={{ fontFamily: fontFamily.regular, fontSize: 12.5, color: color.text3, marginTop: 3 }}>Llena cupos de último momento y destaca eventos de la comunidad.</Text>
+              </Pressable>
+            </GlassCard>
+          </View>
+
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>Ventas</Text>
             <GlassCard level="card">
               <View style={{ padding: 14, gap: 10 }}>

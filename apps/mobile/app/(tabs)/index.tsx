@@ -8,6 +8,7 @@ import { EventHeroCard, EventListCard } from "../../src/components/EventCard";
 import { SearchIcon } from "../../src/components/icons";
 import { NotificationBell } from "../../src/components/NotificationBell";
 import { useAppStore } from "../../src/context/AppStore";
+import { bestLastMinutePct, isLastMinuteActive } from "../../src/utils/lastMinute";
 import { color, fontFamily, spacing } from "../../src/theme/tokens";
 
 export default function HomeScreen() {
@@ -19,6 +20,8 @@ export default function HomeScreen() {
   const sellable = useMemo(() => events.filter((e) => !e.sourceCurated && e.status !== "cancelled" && e.status !== "finished"), [events]);
   const curated = useMemo(() => events.filter((e) => e.sourceCurated), [events]);
   const tours = useMemo(() => sellable.filter((e) => e.kind === "tour" || e.kind === "experience"), [sellable]);
+  const lastMinute = useMemo(() => sellable.filter((e) => e.ticketTypes.some((t) => isLastMinuteActive(t, e))), [sellable]);
+  const freeAndCommunity = useMemo(() => sellable.filter((e) => e.isFree || e.isCommunity), [sellable]);
   const featured = useMemo(() => sellable.slice(0, 2), [sellable]);
   const filtered = useMemo(
     () => (category === "Todos" ? sellable : sellable.filter((e) => e.category === category)),
@@ -64,6 +67,33 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
 
+      {lastMinute.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ofertas de última hora</Text>
+          <Text style={styles.sectionSubtitle}>Descuento automático solo por hoy, hasta que empiece el evento.</Text>
+          <View style={styles.list}>
+            {lastMinute.map((event) => (
+              <View key={event.id}>
+                <Text style={styles.offerBadge}>{bestLastMinutePct(event)}% menos</Text>
+                <EventListCard event={event} />
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {freeAndCommunity.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Gratis y comunitarios</Text>
+          <Text style={styles.sectionSubtitle}>Ferias, deporte, cultura y planes sin costo en tu ciudad.</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heroRow}>
+            {freeAndCommunity.map((event) => (
+              <EventHeroCard key={event.id} event={event} />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {tours.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tours y planes</Text>
@@ -102,6 +132,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  offerBadge: { fontFamily: fontFamily.extraBold, fontSize: 12, color: color.pink, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 },
   header: {
     paddingHorizontal: spacing.screenX,
     flexDirection: "row",

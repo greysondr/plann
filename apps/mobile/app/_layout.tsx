@@ -130,14 +130,17 @@ export default function RootLayout() {
                 <Stack.Screen name="organizador/negocio" />
                 <Stack.Screen name="organizador/analiticas/[id]" />
                 <Stack.Screen name="organizador/equipo" />
+                <Stack.Screen name="organizador/ofertas/[id]" />
                 <Stack.Screen name="puerta" />
                 <Stack.Screen name="organizador/editar/[id]" />
                 <Stack.Screen name="organizador/asistentes/[id]" />
                 <Stack.Screen name="notificaciones" />
+                <Stack.Screen name="regalar/[ticketId]" />
                 <Stack.Screen name="soporte/index" />
                 <Stack.Screen name="soporte/[id]" />
                 <Stack.Screen name="perfil/nivel" />
                 <Stack.Screen name="perfil/historial" />
+                <Stack.Screen name="perfil/cumpleanos" />
               </Stack>
             </AuthGate>
           </ThemeProvider>

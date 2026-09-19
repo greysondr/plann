@@ -22,9 +22,10 @@ export function nextOrderStates(from: OrderStatus): OrderStatus[] {
 }
 
 const TICKET_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  valid: ["used", "void"],
+  valid: ["used", "void", "gifted"],
   used: [],
   void: [],
+  gifted: ["valid"],
 };
 
 export function canTransitionTicket(from: TicketStatus, to: TicketStatus): boolean {

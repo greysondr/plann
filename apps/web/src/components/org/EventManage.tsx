@@ -43,6 +43,27 @@ function TicketTypeCard({ t }: { t: TicketTypeRow }) {
           <input name="end_day" type="date" defaultValue={isoToVeDay(t.sales_end)} className={inputClass} />
         </div>
       </div>
+      {t.price_cents > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-[12px] font-bold text-foreground-3">Oferta de última hora</label>
+            <select name="lm_pct" defaultValue={String(t.last_minute_pct ?? "")} className={inputClass}>
+              <option value="">Sin oferta</option>
+              {[10, 20, 30, 50].map((p) => (
+                <option key={p} value={p}>{p}% menos</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[12px] font-bold text-foreground-3">Se activa desde</label>
+            <select name="lm_hours" defaultValue={String(t.last_minute_hours ?? 24)} className={inputClass}>
+              {[6, 12, 24, 48].map((h) => (
+                <option key={h} value={h}>{h} h antes del evento</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
       <p className="text-[12px] text-foreground-3">
         {t.sold} vendidas{t.reserved > 0 ? ` · ${t.reserved} reservadas` : ""} · deja las fechas vacías para vender hasta agotar
       </p>

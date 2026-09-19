@@ -10,6 +10,7 @@ const STATUS_LABEL: Record<TicketRecord["status"], string> = {
   valid: "Válido",
   used: "Usado",
   void: "Anulado",
+  gifted: "Regalo pendiente",
 };
 
 export function TicketCard({ ticket, event, ticketTypeName }: { ticket: TicketRecord; event: EventItem; ticketTypeName: string }) {
@@ -42,11 +43,17 @@ export function TicketCard({ ticket, event, ticketTypeName }: { ticket: TicketRe
       </View>
 
       <View style={styles.bottom}>
-        <View style={styles.qrPlate}>
-          <QRCode value={qrValue} size={116} color={color.ink} backgroundColor={color.cream} />
-        </View>
-        <Text style={styles.code}>{ticket.code}</Text>
-        <Text style={styles.codeHint}>Si el QR no abre, di este código en la puerta.</Text>
+        {ticket.status === "gifted" ? (
+          <Text style={styles.codeHint}>Esta entrada ya no te sirve: quedó reservada para quien invitaste. Si cancelas el regalo, vuelve a ser tuya.</Text>
+        ) : (
+          <>
+            <View style={styles.qrPlate}>
+              <QRCode value={qrValue} size={116} color={color.ink} backgroundColor={color.cream} />
+            </View>
+            <Text style={styles.code}>{ticket.code}</Text>
+            <Text style={styles.codeHint}>Si el QR no abre, di este código en la puerta.</Text>
+          </>
+        )}
       </View>
     </GlassCard>
   );

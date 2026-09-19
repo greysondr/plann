@@ -21,10 +21,16 @@ function Row({ label, value, onPress }: { label: string; value?: string; onPress
   );
 }
 
+const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function formatBirth(iso: string): string {
+  const [, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS[m - 1]}`;
+}
+
 export default function PerfilScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { favorites, orders, points, tier, organizerStatus, staffAssignments, userEmail, signOut, unreadCount } = useAppStore();
+  const { favorites, orders, points, tier, organizerStatus, staffAssignments, userEmail, signOut, unreadCount, birthDate } = useAppStore();
 
   const soon = (label: string) => () => Alert.alert(label, "Todavía no está listo en este prototipo.");
   const initials = (userEmail ?? "PL").slice(0, 2).toUpperCase();
@@ -103,6 +109,8 @@ export default function PerfilScreen() {
           <Row label="Historial de compras" value={`${paidOrders}`} onPress={() => router.push("/perfil/historial")} />
           <Divider />
           <Row label="Mi nivel y puntos" value={tier.name} onPress={() => router.push("/perfil/nivel")} />
+          <Divider />
+          <Row label="Mi cumpleaños" value={birthDate ? formatBirth(birthDate) : "Recibe descuentos"} onPress={() => router.push("/perfil/cumpleanos")} />
           <Divider />
           <Row label="Mis reseñas" onPress={soon("Mis reseñas")} />
           <Divider />

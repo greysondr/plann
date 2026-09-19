@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Chip } from "../../src/components/Chip";
@@ -23,7 +23,7 @@ type Tab = "proximos" | "pasados" | "pendientes";
 export default function TicketsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { events, tickets, orders } = useAppStore();
+  const { events, tickets, orders, cancelGift } = useAppStore();
   const [tab, setTab] = useState<Tab>("proximos");
 
   const now = Date.now();
@@ -40,8 +40,8 @@ export default function TicketsScreen() {
     [tickets, events, orders]
   );
 
-  const proximos = enriched.filter((t) => t.ticket.status === "valid" && new Date(t.event.startsAt).getTime() >= now);
-  const pasados = enriched.filter((t) => t.ticket.status !== "valid" || new Date(t.event.startsAt).getTime() < now);
+  const proximos = enriched.filter((t) => (t.ticket.status === "valid" || t.ticket.status === "gifted") && new Date(t.event.startsAt).getTime() >= now);
+  const pasados = enriched.filter((t) => (t.ticket.status !== "valid" && t.ticket.status !== "gifted") || new Date(t.event.startsAt).getTime() < now);
   const pendientes = orders.filter((o) => ["pending_payment", "in_verification", "rejected"].includes(o.status));
 
   return (
@@ -64,12 +64,29 @@ export default function TicketsScreen() {
             />
           ) : (
             proximos.map(({ ticket, event, order }) => (
-              <TicketCard
-                key={ticket.id}
-                ticket={ticket}
-                event={event}
-                ticketTypeName={event.ticketTypes.find((t) => t.id === order?.ticketTypeId)?.name ?? "General"}
-              />
+              <View key={ticket.id} style={{ gap: 8 }}>
+                <TicketCard
+                  ticket={ticket}
+                  event={event}
+                  ticketTypeName={event.ticketTypes.find((t) => t.id === order?.ticketTypeId)?.name ?? "General"}
+                />
+                {ticket.status === "valid" && event.status !== "cancelled" && (
+                  <Pressable onPress={() => router.push(`/regalar/${ticket.id}`)} style={styles.giftButton}>
+                    <Text style={styles.giftButtonText}>Regalar esta entrada</Text>
+                  </Pressable>
+                )}
+                {ticket.status === "gifted" && (
+                  <Pressable
+                    onPress={async () => {
+                      const r = await cancelGift(ticket.id);
+                      if (!r.ok) Alert.alert("No se pudo cancelar", r.reason ?? "Intenta de nuevo.");
+                    }}
+                    style={styles.giftButton}
+                  >
+                    <Text style={styles.giftButtonText}>Cancelar regalo</Text>
+                  </Pressable>
+                )}
+              </View>
             ))
           ))}
 
@@ -161,6 +178,8 @@ const styles = StyleSheet.create({
     paddingBottom: 140,
   },
   pendingCard: {},
+  giftButton: { alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: color.pink },
+  giftButtonText: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.pink },
   pendingEvent: {
     fontFamily: fontFamily.bold,
     fontSize: 15,

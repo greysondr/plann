@@ -197,6 +197,7 @@ export async function createEventAction(_prev: FormState, formData: FormData): P
       organizer_id: organizer.id,
       slug: `${slugify(fields.title)}-${Date.now().toString(36)}`,
       kind: "event",
+      is_community: formData.get("is_community") === "on",
       images: collected.urls ?? [],
       ends_at,
       status: publishAt && new Date(publishAt).getTime() > Date.now() ? "draft" : "published",
@@ -228,6 +229,7 @@ export async function updateEventAction(eventId: string, _prev: FormState, formD
   const collected = await collectImages(formData, organizer.id);
   if (collected.error) return { error: collected.error };
   update.images = collected.urls ?? [];
+  update.is_community = formData.get("is_community") === "on";
   if (formData.has("publish_at")) {
     const publishAt = parsePublishAt(formData.get("publish_at"));
     if (publishAt === "invalid") return { error: "La fecha de publicación no es válida." };
@@ -332,10 +334,12 @@ export async function saveTicketTypeAction(ticketTypeId: string, _prev: FormStat
   if (!Number.isInteger(quantity) || quantity < 1) return { error: "El cupo debe ser al menos 1." };
   const window = parseWindow(formData.get("start_day"), formData.get("end_day"));
   if (typeof window === "string") return { error: window };
+  const lmPct = Number(formData.get("lm_pct")) || null;
+  const lmHours = lmPct ? Number(formData.get("lm_hours")) || 24 : null;
   const supabase = await supabaseServer();
   const { error } = await supabase
     .from("ticket_types")
-    .update({ name, price_cents: priceCents, quantity, sales_start: window.start, sales_end: window.end, updated_at: new Date().toISOString() })
+    .update({ name, price_cents: priceCents, quantity, sales_start: window.start, sales_end: window.end, last_minute_pct: lmPct, last_minute_hours: lmHours, updated_at: new Date().toISOString() })
     .eq("id", ticketTypeId);
   if (error) return { error: dbError(error.message, "No pudimos guardar la entrada.") };
   revalidatePath("/organizador", "layout");
@@ -424,6 +428,7 @@ export async function updateProfileAction(_prev: FormState, formData: FormData):
     name,
     bio: String(formData.get("bio") ?? "").trim() || null,
     contact_phone: String(formData.get("contact_phone") ?? "").trim() || null,
+    birthday_pct: [0, 10, 15, 20, 30].includes(Number(formData.get("birthday_pct"))) ? Number(formData.get("birthday_pct")) : 0,
     updated_at: new Date().toISOString(),
   };
   if (["pago_movil", "transfer", "zelle"].includes(method)) {

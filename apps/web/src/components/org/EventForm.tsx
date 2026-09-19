@@ -193,7 +193,7 @@ export function EventForm({
   mode: "create" | "edit";
   categories: Option[];
   cities: Option[];
-  event?: { id: string; title: string; description: string | null; venue_name: string | null; starts_at: string; publish_at?: string | null; status?: string; images?: string[]; category_id: string | null; city_id: string | null };
+  event?: { id: string; title: string; description: string | null; venue_name: string | null; starts_at: string; publish_at?: string | null; status?: string; images?: string[]; category_id: string | null; city_id: string | null; is_community?: boolean };
 }) {
   const action = mode === "create" ? createEventAction : updateEventAction.bind(null, event!.id);
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, {});
@@ -277,6 +277,13 @@ export function EventForm({
         <label className={labelClass}>Descripción</label>
         <textarea name="description" defaultValue={event?.description ?? ""} rows={4} placeholder="Cuéntale a la gente qué va a encontrar en tu evento" className={inputClass} />
       </div>
+
+      <label className="flex items-start gap-3 text-[13.5px] text-foreground-2">
+        <input name="is_community" type="checkbox" defaultChecked={event?.is_community ?? false} className="mt-1 h-4 w-4 accent-pink" />
+        <span>
+          <b className="text-foreground">Evento comunitario</b>: feria, deporte, cultura o encuentro sin fines de lucro. Sale en «Gratis y comunitarios» de la portada.
+        </span>
+      </label>
 
       {mode === "create" && (
         <>

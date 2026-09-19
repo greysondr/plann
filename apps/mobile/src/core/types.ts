@@ -27,6 +27,8 @@ export interface TicketType {
   maxPerOrder: number;
   salesStart?: string; // ISO; sin valor = ya abierta
   salesEnd?: string; // ISO; sin valor = hasta agotar o hasta el evento
+  lastMinutePct?: number; // oferta de última hora: % de descuento
+  lastMinuteHours?: number; // ...que se activa estas horas antes del evento
 }
 
 export type RefundPolicy = "none" | "24h" | "72h" | "always";
@@ -58,6 +60,7 @@ export interface EventItem {
   ticketTypes: TicketType[];
   isFeatured?: boolean;
   isFree?: boolean;
+  isCommunity?: boolean;
   status?: "draft" | "in_review" | "published" | "sold_out" | "live" | "finished" | "cancelled";
   salesPaused?: boolean;
   cancelReason?: string;
@@ -99,7 +102,7 @@ export interface Order {
   paidAt?: string;
 }
 
-export type TicketStatus = "valid" | "used" | "void";
+export type TicketStatus = "valid" | "used" | "void" | "gifted";
 
 export interface TicketRecord {
   id: string;

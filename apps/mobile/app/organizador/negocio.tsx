@@ -23,7 +23,7 @@ export default function NegocioScreen() {
   const allowed = useOrganizerGuard();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { organizerProfile, updateOrganizerProfile } = useAppStore();
+  const { organizerProfile, updateOrganizerProfile, setBirthdayPct } = useAppStore();
 
   const [name, setName] = useState(organizerProfile?.name ?? "");
   const [bio, setBio] = useState(organizerProfile?.bio ?? "");
@@ -110,6 +110,14 @@ export default function NegocioScreen() {
 
         <Text style={[styles.label, { marginTop: 14 }]}>Teléfono de contacto</Text>
         <TextInput value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="0414-0000000" placeholderTextColor={color.text4} style={styles.input} />
+
+        <Text style={[styles.label, { marginTop: 18 }]}>Descuento de cumpleaños</Text>
+        <Text style={[styles.hint, { marginBottom: 8 }]}>Descuento automático para quien cumple años (3 días antes y después) en todos tus eventos. Lo absorbes tú.</Text>
+        <View style={styles.chipsWrap}>
+          {[0, 10, 15, 20, 30].map((p) => (
+            <Chip key={p} label={p === 0 ? "Sin descuento" : `${p}%`} selected={(organizerProfile?.birthdayPct ?? 0) === p} onPress={() => setBirthdayPct(p)} />
+          ))}
+        </View>
 
         <Text style={[styles.label, { marginTop: 18 }]}>Cuenta para recibir tus pagos</Text>
         <View style={styles.chipsWrap}>

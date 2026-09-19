@@ -44,7 +44,8 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(params.id);
-  const { orders, tickets, rateApplied, createOrder, previewCoupon, submitPaymentReference } = useAppStore();
+  const { orders, tickets, rateApplied, createOrder, previewCoupon, submitPaymentReference, quoteAutoOffer } = useAppStore();
+  const [auto, setAuto] = useState<{ discountCents: number; label?: string }>({ discountCents: 0 });
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
@@ -72,6 +73,13 @@ export default function CheckoutScreen() {
       .then(({ data }) => setAccounts((data as ReceivingAccount[]) ?? []));
   }, []);
 
+  useEffect(() => {
+    if (ticketType && ticketType.priceCents > 0) quoteAutoOffer(ticketType.id, quantity).then(setAuto);
+  }, [ticketType?.id, ticketType?.priceCents, quantity, quoteAutoOffer]);
+  // Igual que en el servidor: rige el mejor descuento, no se suman.
+  const autoWins = auto.discountCents > (coupon?.discountCents ?? 0);
+  const appliedDiscount = Math.max(auto.discountCents, coupon?.discountCents ?? 0);
+
   const totals = useMemo(() => {
     if (!ticketType) return null;
     return calculateOrderTotals({
@@ -79,9 +87,9 @@ export default function CheckoutScreen() {
       quantity,
       commissionRate: 0, // no afecta el total del comprador, solo el reparto del organizador
       rateUsed: rateApplied,
-      discountCents: coupon?.discountCents ?? 0,
+      discountCents: appliedDiscount,
     });
-  }, [ticketType, quantity, rateApplied, coupon]);
+  }, [ticketType, quantity, rateApplied, appliedDiscount]);
   const isFree = !!totals && totals.totalCents === 0;
 
   const myTickets = order ? tickets.filter((t) => t.orderId === order.id) : [];
@@ -165,7 +173,11 @@ export default function CheckoutScreen() {
                     {event.title}
                   </Text>
                   <Row label={`${ticketType.name} x${quantity}`} value={formatUsd(ticketType.priceCents * quantity)} />
-                  {coupon && <Row label={`Cupón ${coupon.code.toUpperCase()}`} value={`−${formatUsd(coupon.discountCents)}`} />}
+                  {autoWins ? (
+                    <Row label={auto.label ?? "Oferta"} value={`−${formatUsd(auto.discountCents)}`} />
+                  ) : (
+                    coupon && <Row label={`Cupón ${coupon.code.toUpperCase()}`} value={`−${formatUsd(coupon.discountCents)}`} />
+                  )}
                   {totals.serviceFeeCents > 0 && <Row label="Fee de servicio" value={formatUsd(totals.serviceFeeCents)} />}
                   <View style={styles.divider} />
                   <Row label="Total" value={isFree ? "Gratis" : formatUsd(totals.totalCents)} bold />

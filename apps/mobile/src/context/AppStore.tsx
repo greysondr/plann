@@ -55,6 +55,11 @@ function mapOrganizerStatus(dbStatus: string): OrganizerStatus {
 
 // Errores de las funciones de Postgres (raise exception 'xxx') -> texto para el usuario.
 const DB_ERROR_MESSAGES: Record<string, string> = {
+  email_invalid: "Ese correo no parece válido.",
+  gift_to_self: "No puedes regalarte una entrada a ti mismo.",
+  ticket_not_giftable: "Esta entrada ya no se puede regalar (usada, anulada o en otro regalo).",
+  event_over: "El evento ya terminó o fue cancelado.",
+  ticket_not_found: "No encontramos esa entrada en tu cuenta.",
   insufficient_balance: "No tienes saldo suficiente para ese monto.",
   below_minimum: "El retiro mínimo es de $5,00.",
   account_required: "Escribe los datos de la cuenta donde quieres recibir el pago.",
@@ -109,6 +114,7 @@ export interface OrganizerProfile {
   rejectionReason?: string;
   payoutMethod?: PaymentMethod;
   payoutAccount?: string;
+  birthdayPct: number;
 }
 
 export interface OrganizerProfileInput {
@@ -328,6 +334,16 @@ interface AppStoreValue {
 
   createOrder: (ticketTypeId: string, quantity: number, couponCode?: string) => Promise<CreateOrderResult>;
   previewCoupon: (ticketTypeId: string, quantity: number, code: string) => Promise<{ valid: boolean; discountCents: number; reason?: string }>;
+  quoteAutoOffer: (ticketTypeId: string, quantity: number) => Promise<{ kind: "last_minute" | "birthday" | null; discountCents: number; label?: string }>;
+  alerts: { eventId: string; kind: "waitlist" | "price" }[];
+  toggleAlert: (eventId: string, kind: "waitlist" | "price") => Promise<Result>;
+  birthDate: string | null;
+  setBirthDate: (isoDate: string | null) => Promise<Result>;
+  giftTicket: (ticketId: string, email: string, message?: string) => Promise<{ ok: boolean; delivered?: boolean; reason?: string }>;
+  cancelGift: (ticketId: string) => Promise<Result>;
+  setLastMinute: (ticketTypeId: string, pct: number | null, hours: number | null) => Promise<Result>;
+  setEventCommunity: (eventId: string, value: boolean) => Promise<Result>;
+  setBirthdayPct: (pct: number) => Promise<Result>;
   submitPaymentReference: (orderId: string, method: PaymentMethod, reference: string, bank?: string) => Promise<{ ok: boolean; reason?: string }>;
   checkIn: (code: string, eventId?: string) => Promise<{ status: "valid" | "used" | "invalid"; attendeeName?: string; checkedInAt?: string }>;
   toggleFavorite: (eventId: string) => Promise<void>;
@@ -388,6 +404,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [followerCount, setFollowerCount] = useState(0);
   const [ratingSummary, setRatingSummary] = useState<{ avg: number | null; count: number }>({ avg: null, count: 0 });
   const [orgRole, setOrgRole] = useState<OrgRole | null>(null);
+  const [alerts, setAlerts] = useState<{ eventId: string; kind: "waitlist" | "price" }[]>([]);
+  const [birthDate, setBirthDateState] = useState<string | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffInvites, setStaffInvites] = useState<StaffInvite[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
@@ -431,6 +449,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       maxPerOrder: tt.max_per_order,
       salesStart: tt.sales_start ?? undefined,
       salesEnd: tt.sales_end ?? undefined,
+      lastMinutePct: tt.last_minute_pct ?? undefined,
+      lastMinuteHours: tt.last_minute_hours ?? undefined,
     }));
     const durationMinutes = row.ends_at
       ? Math.max(30, Math.round((new Date(row.ends_at).getTime() - new Date(row.starts_at).getTime()) / 60000))
@@ -471,6 +491,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       isFeatured: false,
       isFree: ticketTypes.length > 0 && ticketTypes.every((t) => t.priceCents === 0),
       slug: row.slug,
+      isCommunity: !!row.is_community,
       sourceCurated: row.source === "curated",
       status: row.status,
       salesPaused: !!row.sales_paused,
@@ -543,6 +564,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         rejectionReason: data.rejection_reason ?? undefined,
         payoutMethod: (data.payout_method as PaymentMethod) ?? undefined,
         payoutAccount: data.payout_account ?? undefined,
+        birthdayPct: Number(data.birthday_pct ?? 0),
       });
     } else {
       setMyOrganizerId(null);
@@ -781,12 +803,18 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         orderId: row.order_id,
         eventId: row.event_id,
         attendeeName: row.attendee_name ?? "Tú",
-        status: row.status === "used" ? "used" : row.status === "valid" ? "valid" : "void",
+        status: row.status === "used" ? "used" : row.status === "valid" ? "valid" : row.status === "transferred" ? "gifted" : "void",
         checkedInAt: row.checked_in_at ?? undefined,
       }))
     );
 
     setFavorites((favRows ?? []).map((r) => r.event_id));
+    const [{ data: alertRows }, { data: meRow }] = await Promise.all([
+      supabase.from("event_alerts").select("event_id, kind").eq("user_id", uid),
+      supabase.from("users").select("birth_date").eq("id", uid).maybeSingle(),
+    ]);
+    setAlerts((alertRows ?? []).map((r: any) => ({ eventId: r.event_id, kind: r.kind })));
+    setBirthDateState(meRow?.birth_date ?? null);
     const { data: followRows } = await supabase.from("follows").select("organizer_id").eq("user_id", uid);
     setFollowedOrganizers((followRows ?? []).map((r: any) => r.organizer_id));
     setReminders((remRows ?? []).map((r) => r.event_id));
@@ -1058,6 +1086,90 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (!r.valid) return { valid: false, discountCents: 0, reason: dbErrorMessage(r.reason, "Ese cupón no es válido.") };
     return { valid: true, discountCents: Number(r.discount_cents) };
   }, []);
+
+  const quoteAutoOffer = useCallback(async (ticketTypeId: string, quantity: number) => {
+    const { data } = await supabase.rpc("quote_auto_offer", { p_ticket_type_id: ticketTypeId, p_quantity: quantity });
+    const r: any = data;
+    if (!r?.kind) return { kind: null, discountCents: 0 };
+    return { kind: r.kind, discountCents: Number(r.discount_cents), label: r.label as string };
+  }, []);
+
+  const toggleAlert = useCallback(
+    async (eventId: string, kind: "waitlist" | "price"): Promise<Result> => {
+      if (!userId) return { ok: false, reason: "Inicia sesión para activar avisos." };
+      const active = alerts.some((a) => a.eventId === eventId && a.kind === kind);
+      const { error } = active
+        ? await supabase.from("event_alerts").delete().eq("user_id", userId).eq("event_id", eventId).eq("kind", kind)
+        : await supabase.from("event_alerts").insert({ user_id: userId, event_id: eventId, kind });
+      if (error) return { ok: false, reason: "No se pudo actualizar el aviso." };
+      setAlerts((prev) => (active ? prev.filter((a) => !(a.eventId === eventId && a.kind === kind)) : [...prev, { eventId, kind }]));
+      return { ok: true };
+    },
+    [userId, alerts]
+  );
+
+  const setBirthDate = useCallback(
+    async (isoDate: string | null): Promise<Result> => {
+      if (!userId) return { ok: false };
+      const { error } = await supabase.from("users").update({ birth_date: isoDate }).eq("id", userId);
+      if (error) return { ok: false, reason: "No se pudo guardar tu fecha." };
+      setBirthDateState(isoDate);
+      return { ok: true };
+    },
+    [userId]
+  );
+
+  const giftTicket = useCallback(
+    async (ticketId: string, email: string, message?: string) => {
+      const { data, error } = await supabase.rpc("gift_ticket", { p_ticket_id: ticketId, p_email: email, p_message: message?.trim() || null });
+      if (userId) await fetchUserData(userId);
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo regalar la entrada.") };
+      return { ok: true, delivered: (data as any)?.status === "delivered" };
+    },
+    [userId, fetchUserData]
+  );
+
+  const cancelGift = useCallback(
+    async (ticketId: string): Promise<Result> => {
+      const { data: gift } = await supabase.from("ticket_gifts").select("id").eq("ticket_id", ticketId).eq("status", "pending").maybeSingle();
+      if (!gift) return { ok: false, reason: "Ese regalo ya no está pendiente." };
+      const { error } = await supabase.rpc("cancel_gift", { p_gift_id: gift.id });
+      if (userId) await fetchUserData(userId);
+      return error ? { ok: false, reason: "No se pudo cancelar el regalo." } : { ok: true };
+    },
+    [userId, fetchUserData]
+  );
+
+  const setLastMinute = useCallback(
+    async (ticketTypeId: string, pct: number | null, hours: number | null): Promise<Result> => {
+      const { error } = await supabase.from("ticket_types").update({ last_minute_pct: pct, last_minute_hours: hours }).eq("id", ticketTypeId);
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar la oferta.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const setEventCommunity = useCallback(
+    async (eventId: string, value: boolean): Promise<Result> => {
+      const { error } = await supabase.from("events").update({ is_community: value }).eq("id", eventId);
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const setBirthdayPct = useCallback(
+    async (pct: number): Promise<Result> => {
+      if (!myOrganizerId || !userId) return { ok: false };
+      const { error } = await supabase.from("organizers").update({ birthday_pct: pct }).eq("id", myOrganizerId);
+      if (error) return { ok: false, reason: "No se pudo guardar el descuento." };
+      await fetchMyOrganizer(userId);
+      return { ok: true };
+    },
+    [myOrganizerId, userId, fetchMyOrganizer]
+  );
 
   const submitPaymentReference = useCallback(
     async (orderId: string, method: PaymentMethod, reference: string, bank?: string) => {
@@ -1780,6 +1892,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       signOut,
       createOrder,
       previewCoupon,
+      quoteAutoOffer,
+      alerts,
+      toggleAlert,
+      birthDate,
+      setBirthDate,
+      giftTicket,
+      cancelGift,
+      setLastMinute,
+      setEventCommunity,
+      setBirthdayPct,
       submitPaymentReference,
       checkIn,
       toggleFavorite,
@@ -1860,6 +1982,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       signOut,
       createOrder,
       previewCoupon,
+      quoteAutoOffer,
+      alerts,
+      toggleAlert,
+      birthDate,
+      setBirthDate,
+      giftTicket,
+      cancelGift,
+      setLastMinute,
+      setEventCommunity,
+      setBirthdayPct,
       submitPaymentReference,
       checkIn,
       toggleFavorite,

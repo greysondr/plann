@@ -17,6 +17,7 @@ export interface OrganizerRow {
   payout_method: "pago_movil" | "transfer" | "zelle" | null;
   payout_account: string | null;
   legal_document: string | null;
+  birthday_pct?: number;
 }
 
 export type OrgRole = "owner" | "editor" | "finance";
