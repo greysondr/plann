@@ -27,7 +27,11 @@ export default function EventDetailScreen() {
   const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer } = useAppStore();
   const [quantity, setQuantity] = useState(1);
 
-  const ticketType = event?.ticketTypes[0];
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const ticketType =
+    event?.ticketTypes.find((t) => t.id === selectedTypeId) ??
+    event?.ticketTypes.find((t) => t.quantity - t.sold - t.reserved > 0) ??
+    event?.ticketTypes[0];
   const organizer = event ? getOrganizer(event.organizerId) : undefined;
 
   const available = ticketType ? ticketType.quantity - ticketType.sold - ticketType.reserved : 0;
@@ -186,11 +190,35 @@ export default function EventDetailScreen() {
             ticketType && (
               <>
                 <Text style={styles.sectionTitle}>Tickets</Text>
+                {event.ticketTypes.length > 1 && (
+                  <View style={{ gap: 8, marginBottom: 10 }}>
+                    {event.ticketTypes.map((t) => {
+                      const left = t.quantity - t.sold - t.reserved;
+                      const selected = t.id === ticketType.id;
+                      return (
+                        <Pressable
+                          key={t.id}
+                          disabled={left <= 0}
+                          onPress={() => {
+                            setSelectedTypeId(t.id);
+                            setQuantity((q) => Math.max(t.minPerOrder, Math.min(q, t.maxPerOrder, left)));
+                          }}
+                          style={[styles.typeOption, selected && styles.typeOptionSelected, left <= 0 && { opacity: 0.45 }]}
+                        >
+                          <Text style={styles.ticketName}>{t.name}</Text>
+                          <Text style={styles.ticketAvailability}>
+                            {left <= 0 ? "Agotado" : t.priceCents === 0 ? "Gratis" : formatUsd(t.priceCents)}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
                 <GlassCard level="field" style={styles.ticketSelector}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.ticketName}>{ticketType.name}</Text>
                     <Text style={styles.ticketAvailability}>
-                      {event.isFree ? "Entrada gratuita" : `${formatUsd(ticketType.priceCents)} · Quedan ${available}`}
+                      {ticketType.priceCents === 0 ? `Gratis · Quedan ${available}` : `${formatUsd(ticketType.priceCents)} · Quedan ${available}`}
                     </Text>
                   </View>
                   <View style={styles.stepper}>
@@ -219,8 +247,8 @@ export default function EventDetailScreen() {
         <GlassCard level="bar" style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 14 }]}>
           <View style={styles.bottomBarInner}>
             <View>
-              <Text style={styles.bottomPrice}>{event.isFree ? "Gratis" : formatUsd(totals.totalCents)}</Text>
-              {!event.isFree && <Text style={styles.bottomPriceBs}>≈ {formatBs(totals.totalBs)} · tasa de hoy</Text>}
+              <Text style={styles.bottomPrice}>{ticketType.priceCents === 0 ? "Gratis" : formatUsd(totals.totalCents)}</Text>
+              {ticketType.priceCents !== 0 && <Text style={styles.bottomPriceBs}>≈ {formatBs(totals.totalBs)} · tasa de hoy</Text>}
             </View>
             <PrimaryButton
               label={event.status === "cancelled" ? "Cancelado" : event.salesPaused ? "Ventas pausadas" : available <= 0 ? "Agotado" : actionLabel}
@@ -237,6 +265,21 @@ export default function EventDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  typeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  typeOptionSelected: {
+    borderColor: color.pink,
+    backgroundColor: "rgba(233,65,127,0.10)",
+  },
   gallery: {
     height: 260,
   },

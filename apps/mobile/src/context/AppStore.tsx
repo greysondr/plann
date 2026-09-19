@@ -60,6 +60,8 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   organizer_not_verified: "Tu cuenta de organizador todavía no está verificada.",
   quantity_below_sold: "El cupo no puede ser menor a lo que ya se vendió.",
   event_closed: "Este evento ya está cerrado y no se puede modificar.",
+  user_not_found: "No hay ninguna cuenta de Plann con ese correo. Pídele que se registre primero.",
+  cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
   sales_paused: "El organizador pausó las ventas de este evento.",
 };
@@ -109,6 +111,33 @@ export interface EventEditInput {
 
 type Result = { ok: boolean; reason?: string };
 
+export interface NewTicketInput {
+  name: string;
+  priceCents: number; // 0 = gratis
+  quantity: number;
+}
+
+export interface StaffMember {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface StaffAssignment {
+  organizerId: string;
+  organizerName: string;
+}
+
+export interface Attendee {
+  ticketId: string;
+  code: string;
+  name: string;
+  ticketTypeName: string;
+  status: "valid" | "used" | "void" | string;
+  checkedInAt?: string;
+  totalCents: number;
+}
+
 export interface NewEventInput {
   title: string;
   category: string;
@@ -117,9 +146,7 @@ export interface NewEventInput {
   description: string;
   startsAt: string;
   durationMinutes: number;
-  isFree: boolean;
-  priceCents: number;
-  quantity: number;
+  tickets: NewTicketInput[];
   imageUri?: string; // uri local (file://...) elegida con expo-image-picker
 }
 
@@ -142,6 +169,8 @@ interface AppStoreValue {
   myOrganizerId: string | null;
   balance: OrganizerBalance;
   withdrawals: Withdrawal[];
+  staff: StaffMember[];
+  staffAssignments: StaffAssignment[];
 
   rateApplied: number;
   points: number;
@@ -159,7 +188,13 @@ interface AppStoreValue {
   requestOrganizerVerification: (name: string, document: string) => Promise<void>;
   createEvent: (input: NewEventInput) => Promise<boolean>;
   updateEvent: (eventId: string, input: EventEditInput) => Promise<Result>;
-  updateTicketType: (ticketTypeId: string, priceCents: number, quantity: number) => Promise<Result>;
+  updateTicketType: (ticketTypeId: string, name: string, priceCents: number, quantity: number) => Promise<Result>;
+  addTicketType: (eventId: string, ticket: NewTicketInput) => Promise<Result>;
+  deleteTicketType: (ticketTypeId: string) => Promise<Result>;
+  addStaff: (email: string) => Promise<Result>;
+  removeStaff: (staffId: string) => Promise<Result>;
+  fetchAttendees: (eventId: string) => Promise<Attendee[]>;
+  fetchCheckinCounts: (eventId: string) => Promise<{ total: number; used: number } | null>;
   setSalesPaused: (eventId: string, paused: boolean) => Promise<Result>;
   cancelEvent: (eventId: string, reason: string) => Promise<Result & { refunds?: number }>;
   requestWithdrawal: (amountCents: number, method: PaymentMethod, account: string) => Promise<Result>;
@@ -191,6 +226,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [myOrganizerId, setMyOrganizerId] = useState<string | null>(null);
   const [balance, setBalance] = useState<OrganizerBalance>({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
 
   const userId = session?.user.id ?? null;
@@ -400,6 +437,21 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // --- Equipo de puerta: los que yo agregué (si soy organizador) y los
+  // organizadores para los que yo hago puerta.
+  const fetchStaff = useCallback(async (uid: string, organizerId: string | null) => {
+    const [{ data: mine }, { data: assigned }] = await Promise.all([
+      organizerId
+        ? supabase.from("organizer_staff").select("id, email, full_name").eq("organizer_id", organizerId).order("created_at")
+        : Promise.resolve({ data: [] as any[] }),
+      supabase.from("organizer_staff").select("organizer_id, organizers(name)").eq("user_id", uid),
+    ]);
+    setStaff((mine ?? []).map((r: any) => ({ id: r.id, email: r.email, name: r.full_name || r.email })));
+    setStaffAssignments(
+      (assigned ?? []).map((r: any) => ({ organizerId: r.organizer_id, organizerName: r.organizers?.name ?? "Organizador" }))
+    );
+  }, []);
+
   // --- Datos propios del comprador: órdenes, tickets, favoritos, puntos ------
   const fetchUserData = useCallback(async (uid: string) => {
     const { data: orderRows } = await supabase
@@ -482,6 +534,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setOrganizerProfile(null);
         setMyOrganizerId(null);
         setOrganizerOrders([]);
+        setStaff([]);
+        setStaffAssignments([]);
         setBalance({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
         setWithdrawals([]);
       }
@@ -555,6 +609,23 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchBalance(myOrganizerId);
   }, [myOrganizerId, organizerOrders, fetchBalance]);
+
+  useEffect(() => {
+    if (userId) fetchStaff(userId, myOrganizerId);
+  }, [userId, myOrganizerId, fetchStaff]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`plann-staff-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "organizer_staff" }, () => {
+        fetchStaff(userId, myOrganizerId);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, myOrganizerId, fetchStaff]);
 
   useEffect(() => {
     if (!myOrganizerId) return;
@@ -781,14 +852,16 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
       if (error || !eventRow) return false;
 
-      await supabase.from("ticket_types").insert({
-        event_id: eventRow.id,
-        name: "Entrada general",
-        price_cents: input.isFree ? 0 : input.priceCents,
-        quantity: input.quantity,
-        min_per_order: 1,
-        max_per_order: 6,
-      });
+      await supabase.from("ticket_types").insert(
+        input.tickets.map((t) => ({
+          event_id: eventRow.id,
+          name: t.name,
+          price_cents: t.priceCents,
+          quantity: t.quantity,
+          min_per_order: 1,
+          max_per_order: 6,
+        }))
+      );
 
       await fetchEvents(myOrganizerId);
       return true;
@@ -816,10 +889,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateTicketType = useCallback(
-    async (ticketTypeId: string, priceCents: number, quantity: number): Promise<Result> => {
+    async (ticketTypeId: string, name: string, priceCents: number, quantity: number): Promise<Result> => {
       const { error } = await supabase
         .from("ticket_types")
-        .update({ price_cents: priceCents, quantity, updated_at: new Date().toISOString() })
+        .update({ name, price_cents: priceCents, quantity, updated_at: new Date().toISOString() })
         .eq("id", ticketTypeId);
       if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar la entrada.") };
       await fetchEvents(myOrganizerId);
@@ -827,6 +900,80 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     },
     [myOrganizerId, fetchEvents]
   );
+
+  const addTicketType = useCallback(
+    async (eventId: string, ticket: NewTicketInput): Promise<Result> => {
+      const { error } = await supabase.from("ticket_types").insert({
+        event_id: eventId,
+        name: ticket.name,
+        price_cents: ticket.priceCents,
+        quantity: ticket.quantity,
+        min_per_order: 1,
+        max_per_order: 6,
+      });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo agregar la entrada.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const deleteTicketType = useCallback(
+    async (ticketTypeId: string): Promise<Result> => {
+      const { error } = await supabase.from("ticket_types").delete().eq("id", ticketTypeId);
+      if (error) {
+        const hasOrders = error.message.includes("foreign key") || error.code === "23503";
+        return {
+          ok: false,
+          reason: hasOrders ? "Esta entrada ya tiene compras. Ponle cupo igual a lo vendido para cerrarla." : "No se pudo eliminar la entrada.",
+        };
+      }
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const addStaff = useCallback(
+    async (email: string): Promise<Result> => {
+      const { error } = await supabase.rpc("add_door_staff", { p_email: email });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo agregar a esa persona.") };
+      if (userId) await fetchStaff(userId, myOrganizerId);
+      return { ok: true };
+    },
+    [userId, myOrganizerId, fetchStaff]
+  );
+
+  const removeStaff = useCallback(
+    async (staffId: string): Promise<Result> => {
+      const { error } = await supabase.rpc("remove_door_staff", { p_staff_id: staffId });
+      if (error) return { ok: false, reason: "No se pudo quitar a esa persona." };
+      if (userId) await fetchStaff(userId, myOrganizerId);
+      return { ok: true };
+    },
+    [userId, myOrganizerId, fetchStaff]
+  );
+
+  const fetchAttendees = useCallback(async (eventId: string): Promise<Attendee[]> => {
+    const { data, error } = await supabase.rpc("list_event_attendees", { p_event_id: eventId });
+    if (error) return [];
+    return ((data as any[]) ?? []).map((r) => ({
+      ticketId: r.ticket_id,
+      code: r.code,
+      name: r.attendee_name,
+      ticketTypeName: r.ticket_type_name,
+      status: r.status,
+      checkedInAt: r.checked_in_at ?? undefined,
+      totalCents: r.total_usd_cents,
+    }));
+  }, []);
+
+  const fetchCheckinCounts = useCallback(async (eventId: string) => {
+    const { data, error } = await supabase.rpc("event_checkin_counts", { p_event_id: eventId });
+    if (error || !data) return null;
+    const r: any = data;
+    return { total: Number(r.total), used: Number(r.used) };
+  }, []);
 
   const setSalesPaused = useCallback(
     async (eventId: string, paused: boolean): Promise<Result> => {
@@ -890,6 +1037,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       myOrganizerId,
       balance,
       withdrawals,
+      staff,
+      staffAssignments,
       rateApplied,
       points,
       tier,
@@ -905,6 +1054,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       createEvent,
       updateEvent,
       updateTicketType,
+      addTicketType,
+      deleteTicketType,
+      addStaff,
+      removeStaff,
+      fetchAttendees,
+      fetchCheckinCounts,
       setSalesPaused,
       cancelEvent,
       requestWithdrawal,
@@ -928,6 +1083,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       myOrganizerId,
       balance,
       withdrawals,
+      staff,
+      staffAssignments,
       rateApplied,
       points,
       tier,
@@ -943,6 +1100,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       createEvent,
       updateEvent,
       updateTicketType,
+      addTicketType,
+      deleteTicketType,
+      addStaff,
+      removeStaff,
+      fetchAttendees,
+      fetchCheckinCounts,
       setSalesPaused,
       cancelEvent,
       requestWithdrawal,

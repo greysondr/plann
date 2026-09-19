@@ -12,7 +12,7 @@ import { useAppStore, useEvent } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { formatEventDate, formatShortDate } from "../../../src/utils/format";
 import { fromCalendarDateString, toCalendarDateString } from "../../../src/utils/eventFilters";
-import { formatUsd } from "../../../src/core/pricing";
+import { TicketDraftEditor, draftToTicket, newDraft, type TicketDraft } from "../../../src/components/TicketTypesForm";
 import type { TicketType } from "../../../src/core/types";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
 
@@ -26,7 +26,8 @@ const TIME_SLOTS = [
 type Message = { text: string; error: boolean } | null;
 
 function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
-  const { updateTicketType } = useAppStore();
+  const { updateTicketType, deleteTicketType } = useAppStore();
+  const [name, setName] = useState(ticketType.name);
   const [price, setPrice] = useState((ticketType.priceCents / 100).toString());
   const [quantity, setQuantity] = useState(String(ticketType.quantity));
   const [saving, setSaving] = useState(false);
@@ -35,13 +36,24 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
   const priceCents = Math.round(parseFloat(price.replace(",", ".")) * 100);
   const quantityNum = parseInt(quantity, 10);
   const valid =
-    Number.isFinite(priceCents) && priceCents >= 0 && Number.isInteger(quantityNum) && quantityNum >= ticketType.sold + ticketType.reserved;
-  const changed = priceCents !== ticketType.priceCents || quantityNum !== ticketType.quantity;
+    name.trim().length >= 2 &&
+    Number.isFinite(priceCents) &&
+    priceCents >= 0 &&
+    Number.isInteger(quantityNum) &&
+    quantityNum >= ticketType.sold + ticketType.reserved;
+  const changed = name.trim() !== ticketType.name || priceCents !== ticketType.priceCents || quantityNum !== ticketType.quantity;
+  const canDelete = ticketType.sold === 0 && ticketType.reserved === 0;
+
+  async function remove() {
+    setMessage(null);
+    const result = await deleteTicketType(ticketType.id);
+    if (!result.ok) setMessage({ text: result.reason ?? "No se pudo eliminar.", error: true });
+  }
 
   async function save() {
     setSaving(true);
     setMessage(null);
-    const result = await updateTicketType(ticketType.id, priceCents, quantityNum);
+    const result = await updateTicketType(ticketType.id, name.trim(), priceCents, quantityNum);
     setSaving(false);
     setMessage(result.ok ? { text: "Entrada actualizada.", error: false } : { text: result.reason ?? "No se pudo guardar.", error: true });
   }
@@ -49,7 +61,7 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
   return (
     <GlassCard level="card">
       <View style={{ padding: 14, gap: 10 }}>
-        <Text style={styles.ticketName}>{ticketType.name}</Text>
+        <TextInput value={name} onChangeText={setName} style={styles.input} placeholder="Nombre de la entrada" placeholderTextColor={color.text4} />
         <Text style={styles.hint}>
           {ticketType.sold} vendidas{ticketType.reserved > 0 ? ` · ${ticketType.reserved} reservadas` : ""}
         </Text>
@@ -68,8 +80,53 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
         )}
         {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
         <PrimaryButton label="Guardar entrada" disabled={!valid || !changed} loading={saving} onPress={save} />
+        <Pressable onPress={remove} disabled={!canDelete} style={{ alignSelf: "center", opacity: canDelete ? 1 : 0.4 }}>
+          <Text style={styles.hint}>{canDelete ? "Eliminar esta entrada" : "Ya tiene ventas: no se puede eliminar"}</Text>
+        </Pressable>
       </View>
     </GlassCard>
+  );
+}
+
+function NewTicketTypeForm({ eventId }: { eventId: string }) {
+  const { addTicketType } = useAppStore();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<TicketDraft>(() => newDraft("VIP"));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<Message>(null);
+  const ticket = draftToTicket(draft);
+
+  if (!open) {
+    return (
+      <Pressable style={styles.outlineButton} onPress={() => setOpen(true)}>
+        <Text style={styles.outlineButtonText}>Agregar otro tipo de entrada</Text>
+      </Pressable>
+    );
+  }
+
+  async function save() {
+    if (!ticket) return;
+    setSaving(true);
+    setMessage(null);
+    const result = await addTicketType(eventId, ticket);
+    setSaving(false);
+    if (result.ok) {
+      setOpen(false);
+      setDraft(newDraft("Preventa"));
+    } else {
+      setMessage({ text: result.reason ?? "No se pudo agregar.", error: true });
+    }
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <TicketDraftEditor draft={draft} onChange={setDraft} />
+      {message && <Text style={styles.messageError}>{message.text}</Text>}
+      <PrimaryButton label="Agregar entrada" disabled={!ticket} loading={saving} onPress={save} />
+      <Pressable onPress={() => setOpen(false)} style={{ alignSelf: "center" }}>
+        <Text style={styles.hint}>Cancelar</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -237,6 +294,7 @@ export default function EditarEventoScreen() {
               {event.ticketTypes.map((tt) => (
                 <TicketTypeEditor key={tt.id} ticketType={tt} />
               ))}
+              <NewTicketTypeForm eventId={event.id} />
             </View>
           </View>
 

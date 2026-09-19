@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GlassCard } from "../../src/components/GlassCard";
 import { ChevronRight, HeartIcon } from "../../src/components/icons";
-import { PrimaryButton } from "../../src/components/Button";
+import { GhostPillButton, PrimaryButton } from "../../src/components/Button";
 import { useAppStore } from "../../src/context/AppStore";
 import { getNextTier } from "../../src/core/loyalty";
 import { color, fontFamily, spacing } from "../../src/theme/tokens";
@@ -24,7 +24,7 @@ function Row({ label, value, onPress }: { label: string; value?: string; onPress
 export default function PerfilScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { favorites, orders, points, tier, organizerStatus, userEmail, signOut } = useAppStore();
+  const { favorites, orders, points, tier, organizerStatus, staffAssignments, userEmail, signOut } = useAppStore();
 
   const soon = (label: string) => () => Alert.alert(label, "Todavía no está listo en este prototipo.");
   const initials = (userEmail ?? "PL").slice(0, 2).toUpperCase();
@@ -122,6 +122,9 @@ export default function PerfilScreen() {
           onPress={handleOrganizerPress}
         />
         {organizerStatus === "pending" && <Text style={styles.pendingHint}>Tu verificación está en revisión.</Text>}
+        {staffAssignments.length > 0 && (
+          <GhostPillButton label="Modo puerta" onPress={() => router.push("/puerta")} style={{ marginTop: 12 }} />
+        )}
       </View>
 
       <View style={styles.section}>

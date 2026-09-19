@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { GlassCard } from "../../src/components/GlassCard";
 import { Chip } from "../../src/components/Chip";
 import { PrimaryButton } from "../../src/components/Button";
+import { TICKET_NAME_PRESETS, TicketDraftEditor, newDraft, validDrafts, type TicketDraft } from "../../src/components/TicketTypesForm";
 import { ChevronRight } from "../../src/components/icons";
 import { useAppStore } from "../../src/context/AppStore";
 import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
@@ -38,15 +39,12 @@ export default function CrearEventoScreen() {
   const [description, setDescription] = useState("");
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [slotIndex, setSlotIndex] = useState<number | null>(null);
-  const [isFree, setIsFree] = useState(false);
-  const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const [drafts, setDrafts] = useState<TicketDraft[]>(() => [newDraft("General")]);
   const [submitted, setSubmitted] = useState(false);
 
   if (!allowed) return null;
 
-  const priceCents = Math.round(parseFloat(price.replace(",", ".")) * 100);
-  const quantityNum = parseInt(quantity, 10);
+  const tickets = validDrafts(drafts);
 
   const canSubmit =
     title.trim().length > 2 &&
@@ -54,9 +52,7 @@ export default function CrearEventoScreen() {
     venueName.trim().length > 1 &&
     !!customDate &&
     slotIndex !== null &&
-    Number.isInteger(quantityNum) &&
-    quantityNum > 0 &&
-    (isFree || (Number.isFinite(priceCents) && priceCents > 0));
+    tickets !== null;
 
   async function handlePickImage() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -90,9 +86,7 @@ export default function CrearEventoScreen() {
       description: description.trim() || "Sin descripción por ahora.",
       startsAt: date.toISOString(),
       durationMinutes: 180,
-      isFree,
-      priceCents: isFree ? 0 : priceCents,
-      quantity: quantityNum,
+      tickets: tickets!,
       imageUri: imageUri ?? undefined,
     });
     if (!ok) {
@@ -222,33 +216,32 @@ export default function CrearEventoScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.label}>Precio</Text>
-        <View style={styles.chipsWrap}>
-          <Chip label="Gratis" selected={isFree} onPress={() => setIsFree(true)} />
-          <Chip label="De pago" selected={!isFree} onPress={() => setIsFree(false)} />
+        <Text style={styles.label}>Entradas</Text>
+        <Text style={styles.hint}>Puedes vender varios tipos (general, VIP, preventa), cada uno con su precio y cupo. Deja el precio vacío si es gratis.</Text>
+        <View style={{ gap: 12, marginTop: 10 }}>
+          {drafts.map((draft) => (
+            <TicketDraftEditor
+              key={draft.key}
+              draft={draft}
+              onChange={(next) => setDrafts((list) => list.map((d) => (d.key === next.key ? next : d)))}
+              onRemove={drafts.length > 1 ? () => setDrafts((list) => list.filter((d) => d.key !== draft.key)) : undefined}
+            />
+          ))}
+          <Pressable
+            style={styles.addTicket}
+            onPress={() =>
+              setDrafts((list) => {
+                const used = new Set(list.map((d) => d.name));
+                return [...list, newDraft(TICKET_NAME_PRESETS.find((n) => !used.has(n)) ?? "")];
+              })
+            }
+          >
+            <Text style={styles.addTicketText}>Agregar otro tipo de entrada</Text>
+          </Pressable>
         </View>
-        {!isFree && (
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            placeholder="Precio por entrada en USD, ej. 10"
-            placeholderTextColor={color.text4}
-            keyboardType="decimal-pad"
-            style={[styles.input, { marginTop: 10 }]}
-          />
+        {drafts.length > 1 && tickets === null && (
+          <Text style={styles.hint}>Cada entrada necesita nombre distinto, precio (vacío si es gratis) y cupo.</Text>
         )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.label}>Cantidad de entradas</Text>
-        <TextInput
-          value={quantity}
-          onChangeText={setQuantity}
-          placeholder="Ej. 100"
-          placeholderTextColor={color.text4}
-          keyboardType="number-pad"
-          style={styles.input}
-        />
       </View>
 
       <View style={styles.section}>
@@ -298,6 +291,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     marginBottom: 10,
   },
+  addTicket: {
+    minHeight: 46,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.22)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addTicketText: { fontFamily: fontFamily.bold, fontSize: 13.5, color: color.text2 },
   input: {
     height: 50,
     borderRadius: radius.field,

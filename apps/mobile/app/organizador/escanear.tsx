@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -6,33 +6,37 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronRight } from "../../src/components/icons";
 import { PrimaryButton } from "../../src/components/Button";
 import { useAppStore, useEvent } from "../../src/context/AppStore";
-import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
+import { useDoorGuard } from "../../src/hooks/useDoorGuard";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
 
 type Result = { status: "valid" | "used" | "invalid"; name?: string; time?: string } | null;
 
 export default function EscanearScreen() {
-  const allowed = useOrganizerGuard();
   const { eventId } = useLocalSearchParams<{ eventId?: string }>();
+  const allowed = useDoorGuard(eventId);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(eventId);
-  const { tickets, checkIn } = useAppStore();
+  const { checkIn, fetchCheckinCounts } = useAppStore();
+  const [counts, setCounts] = useState<{ total: number; used: number } | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [manualCode, setManualCode] = useState("");
   const [result, setResult] = useState<Result>(null);
   const scanLock = useRef(false);
 
-  const relevantTickets = useMemo(
-    () => (eventId ? tickets.filter((t) => t.eventId === eventId) : tickets),
-    [tickets, eventId]
-  );
-  const checkedIn = relevantTickets.filter((t) => t.status === "used").length;
+  const refreshCounts = useCallback(async () => {
+    if (eventId) setCounts(await fetchCheckinCounts(eventId));
+  }, [eventId, fetchCheckinCounts]);
+
+  useEffect(() => {
+    if (allowed) refreshCounts();
+  }, [allowed, refreshCounts]);
 
   if (!allowed) return null;
 
   async function applyResult(code: string) {
     const outcome = await checkIn(code, eventId);
+    refreshCounts();
     if (outcome.status === "invalid") {
       setResult({ status: "invalid" });
       return;
@@ -68,9 +72,11 @@ export default function EscanearScreen() {
         </Pressable>
         <View style={{ alignItems: "center" }}>
           <Text style={styles.title}>{event ? event.title : "Escanear"}</Text>
-          <Text style={styles.counter}>
-            {checkedIn} / {relevantTickets.length} dentro
-          </Text>
+          {counts && (
+            <Text style={styles.counter}>
+              {counts.used} / {counts.total} dentro
+            </Text>
+          )}
         </View>
         <View style={{ width: 18 }} />
       </View>
@@ -92,7 +98,7 @@ export default function EscanearScreen() {
       </View>
 
       <View style={styles.manualBox}>
-        <Text style={styles.manualLabel}>Buscar por nombre o código si el QR no abre</Text>
+        <Text style={styles.manualLabel}>Escribe el código si el QR no abre</Text>
         <View style={styles.manualRow}>
           <TextInput
             value={manualCode}

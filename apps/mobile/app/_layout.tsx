@@ -90,6 +90,8 @@ export default function RootLayout() {
                 <Stack.Screen name="organizador/crear" />
                 <Stack.Screen name="organizador/escanear" />
                 <Stack.Screen name="organizador/retiros" />
+                <Stack.Screen name="organizador/equipo" />
+                <Stack.Screen name="puerta" />
                 <Stack.Screen name="organizador/editar/[id]" />
                 <Stack.Screen name="organizador/asistentes/[id]" />
                 <Stack.Screen name="perfil/nivel" />

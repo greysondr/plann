@@ -105,6 +105,9 @@ export default function OrganizadorScreen() {
       <View style={styles.section}>
         <View style={styles.actionsRow}>
           <PrimaryButton label="Publicar evento" onPress={() => router.push("/organizador/crear")} style={{ flex: 1 }} />
+          <Pressable style={styles.teamButton} onPress={() => router.push("/organizador/equipo")}>
+            <Text style={styles.teamButtonText}>Equipo</Text>
+          </Pressable>
           <Pressable style={styles.scanButton} onPress={() => router.push("/organizador/escanear")}>
             <ScanIcon size={20} />
           </Pressable>
@@ -274,6 +277,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  teamButton: {
+    paddingHorizontal: 16,
+    height: 50,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  teamButtonText: { fontFamily: fontFamily.bold, fontSize: 14, color: color.text },
   scanButton: {
     width: 50,
     height: 50,
