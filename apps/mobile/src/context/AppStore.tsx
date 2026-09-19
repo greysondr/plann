@@ -799,6 +799,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         code: row.code,
         orderId: row.order_id,
         eventId: row.event_id,
+        ticketTypeId: row.ticket_type_id,
         attendeeName: row.attendee_name ?? "Tú",
         status: row.status === "used" ? "used" : row.status === "valid" ? "valid" : row.status === "transferred" ? "gifted" : "void",
         checkedInAt: row.checked_in_at ?? undefined,

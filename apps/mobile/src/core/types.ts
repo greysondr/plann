@@ -109,6 +109,7 @@ export interface TicketRecord {
   code: string; // PLN-XXXXXX
   orderId: string;
   eventId: string;
+  ticketTypeId?: string;
   attendeeName: string;
   status: TicketStatus;
   checkedInAt?: string;
