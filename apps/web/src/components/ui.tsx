@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
+import { InfoTip } from "@/components/InfoTip";
+import { getHelp } from "@/lib/help";
+
+function Tip({ label, help }: { label?: string; help?: string | false }) {
+  const text = help === false ? undefined : (help ?? getHelp(label));
+  return text ? <InfoTip text={text} /> : null;
+}
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return (
@@ -9,11 +16,14 @@ export function Card({ className, children }: { className?: string; children: Re
   );
 }
 
-export function CardHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+export function CardHeader({ title, subtitle, action, help }: { title: string; subtitle?: string; action?: ReactNode; help?: string | false }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
       <div>
-        <h3 className="text-[15px] font-bold text-foreground">{title}</h3>
+        <h3 className="flex items-center gap-1.5 text-[15px] font-bold text-foreground">
+          {title}
+          <Tip label={title} help={help} />
+        </h3>
         {subtitle && <p className="mt-0.5 text-[12.5px] text-foreground-3">{subtitle}</p>}
       </div>
       {action}
@@ -64,7 +74,9 @@ export function StatCard({
   delta,
   deltaTone = "success",
   hint,
+  help,
 }: {
+  help?: string | false;
   label: string;
   value: string;
   delta?: string;
@@ -73,7 +85,10 @@ export function StatCard({
 }) {
   return (
     <Card className="p-5">
-      <p className="text-[12.5px] font-bold uppercase tracking-wide text-foreground-3">{label}</p>
+      <p className="flex items-center gap-1.5 text-[12.5px] font-bold uppercase tracking-wide text-foreground-3">
+        {label}
+        <Tip label={label} help={help} />
+      </p>
       <p className="mt-2 text-[26px] font-extrabold leading-none text-foreground">{value}</p>
       <div className="mt-2 flex items-center gap-2">
         {delta && (
@@ -96,11 +111,14 @@ export function EmptyState({ title, subtitle }: { title: string; subtitle?: stri
   );
 }
 
-export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+export function PageHeader({ title, subtitle, action, help }: { title: string; subtitle?: string; action?: ReactNode; help?: string | false }) {
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 className="text-[22px] font-extrabold tracking-tight text-foreground">{title}</h1>
+        <h1 className="flex items-center gap-2 text-[22px] font-extrabold tracking-tight text-foreground">
+          {title}
+          <Tip label={title} help={help} />
+        </h1>
         {subtitle && <p className="mt-1 text-[13.5px] text-foreground-3">{subtitle}</p>}
       </div>
       {action}

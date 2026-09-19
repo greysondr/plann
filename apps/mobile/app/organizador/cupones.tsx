@@ -11,6 +11,7 @@ import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { formatUsd } from "../../src/core/pricing";
 import { formatShortDate } from "../../src/utils/format";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 function describe(c: Coupon): string {
   return c.discountType === "percent" ? `${c.discountValue}% de descuento` : `${formatUsd(c.discountValue)} de descuento`;
@@ -68,7 +69,7 @@ export default function CuponesScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Cupones</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Cupones" size={18} />
       </View>
 
       <View style={styles.section}>

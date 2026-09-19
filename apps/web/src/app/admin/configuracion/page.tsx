@@ -28,7 +28,7 @@ export default function ConfiguracionPage() {
 
   return (
     <div>
-      <PageHeader title="Configuración" subtitle="Nada de esto está escrito en el código: cada cambio queda en el registro de auditoría." />
+      <PageHeader title="Configuración" help="Ajustes globales de Plann: cuentas receptoras, comisiones por plan, banderas de funciones y equipo. Cada cambio queda en la auditoría." subtitle="Nada de esto está escrito en el código: cada cambio queda en el registro de auditoría." />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

@@ -7,6 +7,7 @@ import { PrimaryButton } from "../../src/components/Button";
 import { ChevronRight } from "../../src/components/icons";
 import { useAppStore } from "../../src/context/AppStore";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 const STEPS = [
   "Nombre legal o razón social",
@@ -39,7 +40,7 @@ export default function ActivarOrganizadorScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Modo organizador</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Conviértete en organizador" size={18} />
       </View>
 
       {organizerStatus === "pending" ? (

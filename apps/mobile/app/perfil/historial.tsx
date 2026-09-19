@@ -9,6 +9,7 @@ import { formatEventDate } from "../../src/utils/format";
 import { formatUsd } from "../../src/core/pricing";
 import type { OrderStatus } from "../../src/core/types";
 import { color, fontFamily, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 const STATUS_LABEL: Record<OrderStatus, string> = {
   pending_payment: "Pendiente de pago",
@@ -40,7 +41,7 @@ export default function HistorialScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Historial de compras</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Historial de compras" size={18} />
       </View>
 
       <View style={styles.section}>

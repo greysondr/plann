@@ -7,6 +7,7 @@ import { ChevronRight } from "../../src/components/icons";
 import { useAppStore } from "../../src/context/AppStore";
 import { formatEventDate } from "../../src/utils/format";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 export default function RegalarScreen() {
   const { ticketId } = useLocalSearchParams<{ ticketId: string }>();
@@ -56,7 +57,7 @@ export default function RegalarScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Regalar entrada</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Regalar entrada" size={18} />
       </View>
 
       {!ticket || !event ? (

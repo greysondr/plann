@@ -56,6 +56,7 @@ export function OrgSidebar({ organizerName, email, role, unread = 0, pending = 0
                     <Link
                       key={item.href}
                       href={item.href}
+                      title={item.hint}
                       className={clsx(
                         "flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-semibold transition-colors",
                         active ? "bg-pink-soft text-pink" : "text-foreground-2 hover:bg-surface-muted"

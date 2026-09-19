@@ -12,6 +12,7 @@ import { formatUsd } from "../../src/core/pricing";
 import { formatShortDate } from "../../src/utils/format";
 import type { PaymentMethod } from "../../src/core/types";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../src/components/InfoTip";
 
 const MIN_WITHDRAWAL_CENTS = 500;
 
@@ -89,7 +90,7 @@ export default function RetirosScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Retiros</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Retiros y saldo" size={18} />
       </View>
 
       <View style={styles.section}>
@@ -112,7 +113,7 @@ export default function RetirosScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Solicitar retiro</Text>
+        <HelpTitle style={styles.sectionTitle}>Solicitar retiro</HelpTitle>
         <Text style={styles.label}>Recibir por</Text>
         <View style={styles.chipsWrap}>
           {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (

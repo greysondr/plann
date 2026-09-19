@@ -25,6 +25,7 @@ import {
 import { OrgToolTile } from "../../../src/components/OrgToolTile";
 import { toolsFor } from "../../../src/core/orgTools";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../../src/components/InfoTip";
 
 const DAY = 24 * 3600 * 1000;
 const ORDER_LABEL: Record<string, string> = {
@@ -47,7 +48,10 @@ function Kpi({ label, value, hint, change }: { label: string; value: string; hin
   return (
     <GlassCard level="card" style={styles.kpiCard}>
       <View style={styles.kpiInner}>
-        <Text style={styles.kpiLabel}>{label}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={styles.kpiLabel}>{label}</Text>
+          <InfoTip label={label} size={14} />
+        </View>
         <Text style={styles.kpiValue}>{value}</Text>
         <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
           {change && <Text style={[styles.kpiChange, !change.up && { color: color.text3 }]}>{change.text}</Text>}
@@ -134,7 +138,10 @@ export default function OrganizadorScreen() {
         <GlassCard level="card">
           <View style={styles.balanceRow}>
             <View>
-              <Text style={styles.kpiLabel}>Saldo disponible</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.kpiLabel}>Saldo disponible</Text>
+                <InfoTip label="Saldo disponible" size={14} />
+              </View>
               <Text style={styles.balanceValue}>{formatUsd(balance.availableCents)}</Text>
               {balance.releasePendingCents > 0 && <Text style={styles.kpiHint}>+ {formatUsd(balance.releasePendingCents)} por liberar</Text>}
               {balance.pendingCents > 0 && <Text style={styles.kpiHint}>{formatUsd(balance.pendingCents)} en proceso de pago</Text>}
@@ -187,7 +194,7 @@ export default function OrganizadorScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ventas por día</Text>
+        <HelpTitle style={styles.sectionTitle}>Ventas por día</HelpTitle>
         <GlassCard level="card">
           <View style={{ padding: 16 }}>
             {stats.cur.orders + stats.prev.orders === 0 ? (
@@ -201,7 +208,7 @@ export default function OrganizadorScreen() {
 
       {stats.byEvent.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ingresos por evento</Text>
+          <HelpTitle style={styles.sectionTitle}>Ingresos por evento</HelpTitle>
           <GlassCard level="card">
             <View style={{ padding: 16 }}>
               <BarList data={stats.byEvent.map((s) => ({ name: s.name, value: s.netCents }))} format={formatUsd} />
@@ -212,7 +219,7 @@ export default function OrganizadorScreen() {
 
       {stats.cur.tickets > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Cuándo compran</Text>
+          <HelpTitle style={styles.sectionTitle}>Cuándo compran</HelpTitle>
           <GlassCard level="card">
             <View style={{ padding: 16 }}>
               <ColumnChart data={stats.weekday.map((d) => ({ label: d.label, value: d.tickets }))} />
@@ -222,7 +229,7 @@ export default function OrganizadorScreen() {
       )}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Próximos eventos</Text>
+        <HelpTitle style={styles.sectionTitle}>Próximos eventos</HelpTitle>
         {upcoming.length === 0 ? (
           <Text style={styles.empty}>No tienes eventos próximos.</Text>
         ) : (
@@ -255,7 +262,7 @@ export default function OrganizadorScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Últimos pedidos</Text>
+        <HelpTitle style={styles.sectionTitle}>Últimos pedidos</HelpTitle>
         {analyticsOrders.length === 0 ? (
           <Text style={styles.empty}>Todavía no hay pedidos. Cuando alguien compre aparece aquí al instante.</Text>
         ) : (

@@ -10,6 +10,7 @@ import { funnel } from "../../../src/core/orgAnalytics";
 import { formatUsd } from "../../../src/core/pricing";
 import { formatShortDate } from "../../../src/utils/format";
 import { color, fontFamily, spacing } from "../../../src/theme/tokens";
+import { InfoTip } from "../../../src/components/InfoTip";
 
 const STATES: { id: string; label: string; match: (s: string) => boolean }[] = [
   { id: "todos", label: "Todos", match: () => true },
@@ -175,7 +176,10 @@ function Kpi({ label, value }: { label: string; value: string }) {
   return (
     <GlassCard level="card" style={{ width: "47.5%" }}>
       <View style={{ padding: 14, gap: 4 }}>
-        <Text style={styles.meta}>{label}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={styles.meta}>{label}</Text>
+          <InfoTip label={label.replace(/ \d+%$/, "")} size={14} />
+        </View>
         <Text style={styles.kpiValue}>{value}</Text>
       </View>
     </GlassCard>

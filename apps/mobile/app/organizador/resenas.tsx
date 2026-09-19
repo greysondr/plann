@@ -8,6 +8,7 @@ import { useAppStore, type Review } from "../../src/context/AppStore";
 import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { formatShortDate } from "../../src/utils/format";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 export default function ResenasScreen() {
   const allowed = useOrganizerGuard();
@@ -51,7 +52,7 @@ export default function ResenasScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Reseñas</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Reseñas" size={18} />
       </View>
 
       <View style={styles.section}>

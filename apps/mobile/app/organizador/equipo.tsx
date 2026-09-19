@@ -9,6 +9,7 @@ import { ChevronRight } from "../../src/components/icons";
 import { useAppStore, type StaffRole } from "../../src/context/AppStore";
 import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../src/components/InfoTip";
 
 const LIMIT = { basico: 1, pro: 5, business: 50 } as const;
 const ROLE_INFO: Record<StaffRole, { label: string; hint: string }> = {
@@ -53,7 +54,7 @@ export default function EquipoScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Equipo</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Equipo y roles" size={18} />
       </View>
 
       <View style={styles.section}>
@@ -63,7 +64,7 @@ export default function EquipoScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Agregar persona</Text>
+        <HelpTitle style={styles.sectionTitle}>Agregar persona</HelpTitle>
         <View style={styles.roleChips}>
           {(Object.keys(ROLE_INFO) as StaffRole[]).map((r) => (
             <Chip key={r} label={ROLE_INFO[r].label} selected={role === r} onPress={() => setRole(r)} />
@@ -85,7 +86,7 @@ export default function EquipoScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Tu equipo</Text>
+        <HelpTitle style={styles.sectionTitle}>Tu equipo</HelpTitle>
         {staff.length === 0 && staffInvites.length === 0 ? (
           <Text style={styles.hint}>Todavía no has agregado a nadie.</Text>
         ) : (

@@ -19,6 +19,20 @@ import {
 } from "lucide-react";
 import { paymentQueue, withdrawals } from "@/lib/mock-data";
 
+const HINTS: Record<string, string> = {
+  "/admin": "Resumen del negocio",
+  "/admin/pagos": "Verifica los pagos de los compradores",
+  "/admin/retiros": "Lo que le debes a los organizadores",
+  "/admin/solicitudes": "Aprueba o rechaza nuevos organizadores",
+  "/admin/organizadores": "Planes, ventas y suspensiones",
+  "/admin/eventos": "Modera los eventos publicados",
+  "/admin/usuarios": "Compradores registrados",
+  "/admin/soporte": "Consultas de usuarios",
+  "/admin/reportes": "Descarga de reportes",
+  "/admin/auditoria": "Bitácora de acciones",
+  "/admin/configuracion": "Comisiones, cuentas y funciones",
+};
+
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/pagos", label: "Pagos y conciliación", icon: Banknote, badgeKey: "pagos" as const },
@@ -55,6 +69,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={HINTS[item.href]}
               className={clsx(
                 "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13.5px] font-semibold transition-colors",
                 active ? "bg-pink-soft text-pink" : "text-foreground-2 hover:bg-surface-muted"

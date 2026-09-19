@@ -6,6 +6,7 @@ import { PrimaryButton } from "../../src/components/Button";
 import { ChevronRight } from "../../src/components/icons";
 import { useAppStore, useEvent } from "../../src/context/AppStore";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 const LABELS = ["", "Malo", "Regular", "Bien", "Muy bueno", "Excelente"];
 
@@ -41,7 +42,7 @@ export default function ResenaScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Tu reseña</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Calificar evento" size={18} />
       </View>
 
       {done ? (

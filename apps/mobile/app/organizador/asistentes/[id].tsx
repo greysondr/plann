@@ -11,6 +11,7 @@ import { normalizeSearch } from "../../../src/utils/format";
 import { PrimaryButton } from "../../../src/components/Button";
 import { Chip } from "../../../src/components/Chip";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
+import { InfoTip } from "../../../src/components/InfoTip";
 
 const STATUS_LABEL: Record<string, string> = {
   valid: "Pagado",
@@ -137,7 +138,7 @@ export default function AsistentesScreen() {
         <Text style={styles.title} numberOfLines={1}>
           {event.title}
         </Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Asistentes" size={18} />
       </View>
 
       <View style={styles.section}>

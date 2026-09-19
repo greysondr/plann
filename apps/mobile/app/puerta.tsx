@@ -7,6 +7,7 @@ import { ChevronRight, ScanIcon } from "../src/components/icons";
 import { useAppStore } from "../src/context/AppStore";
 import { formatEventDate } from "../src/utils/format";
 import { color, fontFamily, spacing } from "../src/theme/tokens";
+import { InfoTip } from "../src/components/InfoTip";
 
 // Vista del personal de puerta: solo los eventos próximos de los organizadores
 // que lo agregaron, con acceso directo al escáner. Nada de ventas ni compradores.
@@ -32,7 +33,7 @@ export default function PuertaScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Modo puerta</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Modo puerta" size={18} />
       </View>
 
       <View style={styles.section}>

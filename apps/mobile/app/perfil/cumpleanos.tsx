@@ -6,6 +6,7 @@ import { PrimaryButton } from "../../src/components/Button";
 import { ChevronRight } from "../../src/components/icons";
 import { useAppStore } from "../../src/context/AppStore";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 function validDate(d: number, m: number, y: number): boolean {
   if (!d || !m || !y || y < 1920 || y > new Date().getFullYear() - 13) return false;
@@ -43,7 +44,7 @@ export default function CumpleanosScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Mi cumpleaños</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Mi cumpleaños" size={18} />
       </View>
       <View style={styles.section}>
         <Text style={styles.hint}>

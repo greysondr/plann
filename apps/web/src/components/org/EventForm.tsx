@@ -1,5 +1,6 @@
 "use client";
 
+import { InfoTip } from "@/components/InfoTip";
 import { useActionState, useMemo, useState } from "react";
 import { createEventAction, updateEventAction } from "@/app/organizador/(panel)/actions";
 import type { FormState } from "@/app/organizador/actions";
@@ -281,7 +282,7 @@ export function EventForm({
       <label className="flex items-start gap-3 text-[13.5px] text-foreground-2">
         <input name="is_community" type="checkbox" defaultChecked={event?.is_community ?? false} className="mt-1 h-4 w-4 accent-pink" />
         <span>
-          <b className="text-foreground">Evento comunitario</b>: feria, deporte, cultura o encuentro sin fines de lucro. Sale en «Gratis y comunitarios» de la portada.
+          <b className="text-foreground">Evento comunitario</b> <InfoTip text="Marca ferias, deporte, cultura o encuentros sin fines de lucro. Aparecen en la sección «Gratis y comunitarios» de la portada de la app." />: feria, deporte, cultura o encuentro sin fines de lucro. Sale en «Gratis y comunitarios» de la portada.
         </span>
       </label>
 

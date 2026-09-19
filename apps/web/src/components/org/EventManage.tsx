@@ -10,6 +10,7 @@ import {
 } from "@/app/organizador/(panel)/actions";
 import type { FormState } from "@/app/organizador/actions";
 import { Button, Card, CardHeader } from "@/components/ui";
+import { InfoTip } from "@/components/InfoTip";
 import { Message } from "@/components/org/Forms";
 import type { TicketTypeRow } from "@/lib/org/data";
 import { isoToVeDay } from "@/lib/format";
@@ -29,24 +30,24 @@ function TicketTypeCard({ t }: { t: TicketTypeRow }) {
           <input name="price" defaultValue={String(t.price_cents / 100)} inputMode="decimal" className={inputClass} />
         </div>
         <div>
-          <label className="mb-1 block text-[12px] font-bold text-foreground-3">Cupo total</label>
+          <label className="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-foreground-3">Cupo total <InfoTip text="Cuántas entradas de este tipo puedes vender en total. No puede ser menor a lo ya vendido o reservado." /></label>
           <input name="quantity" defaultValue={String(t.quantity)} inputMode="numeric" className={inputClass} />
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-[12px] font-bold text-foreground-3">Venta desde</label>
+          <label className="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-foreground-3">Venta desde <InfoTip text="Día en que abre la venta de este tipo de entrada (preventas). Vacío = ya está abierta." /></label>
           <input name="start_day" type="date" defaultValue={isoToVeDay(t.sales_start)} className={inputClass} />
         </div>
         <div>
-          <label className="mb-1 block text-[12px] font-bold text-foreground-3">Venta hasta</label>
+          <label className="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-foreground-3">Venta hasta <InfoTip text="Último día en que se vende este tipo de entrada. Vacío = hasta agotar o hasta el evento." /></label>
           <input name="end_day" type="date" defaultValue={isoToVeDay(t.sales_end)} className={inputClass} />
         </div>
       </div>
       {t.price_cents > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-[12px] font-bold text-foreground-3">Oferta de última hora</label>
+            <label className="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-foreground-3">Oferta de última hora <InfoTip text="Descuento automático que se activa pocas horas antes del evento para llenar cupos que sobran. Tú absorbes la rebaja; avisamos a quienes vigilan el precio y a tus seguidores." /></label>
             <select name="lm_pct" defaultValue={String(t.last_minute_pct ?? "")} className={inputClass}>
               <option value="">Sin oferta</option>
               {[10, 20, 30, 50].map((p) => (
@@ -55,7 +56,7 @@ function TicketTypeCard({ t }: { t: TicketTypeRow }) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-[12px] font-bold text-foreground-3">Se activa desde</label>
+            <label className="mb-1 flex items-center gap-1.5 text-[12px] font-bold text-foreground-3">Se activa desde <InfoTip text="Cuántas horas antes de que empiece el evento se aplica el descuento." /></label>
             <select name="lm_hours" defaultValue={String(t.last_minute_hours ?? 24)} className={inputClass}>
               {[6, 12, 24, 48].map((h) => (
                 <option key={h} value={h}>{h} h antes del evento</option>
@@ -134,7 +135,7 @@ export function TicketTypesManager({ eventId, types }: { eventId: string; types:
 export function SalesControl({ eventId, paused }: { eventId: string; paused: boolean }) {
   return (
     <Card>
-      <CardHeader title="Ventas" subtitle={paused ? "Las ventas están pausadas: el evento se ve, pero nadie puede comprar." : "Las ventas están abiertas."} />
+      <CardHeader title="Ventas" help="Pausar detiene las compras nuevas sin ocultar el evento. Úsalo si hay un problema o quieres cerrar la venta un rato; puedes reanudar cuando quieras." subtitle={paused ? "Las ventas están pausadas: el evento se ve, pero nadie puede comprar." : "Las ventas están abiertas."} />
       <div className="p-5">
         <form action={setSalesPausedAction.bind(null, eventId, !paused)}>
           <Button type="submit" variant="ghost">

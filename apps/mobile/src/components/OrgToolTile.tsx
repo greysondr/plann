@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { GlassCard } from "./GlassCard";
+import { InfoTip } from "./InfoTip";
 import { color, fontFamily } from "../theme/tokens";
 import type { OrgTool } from "../core/orgTools";
 
@@ -12,6 +13,7 @@ export function OrgToolTile({ tool, badge, onPress }: { tool: OrgTool; badge?: n
           <Text style={styles.label} numberOfLines={1}>
             {tool.label}
           </Text>
+          <InfoTip label={tool.label} size={15} />
           {!!badge && badge > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{badge > 9 ? "9+" : badge}</Text>

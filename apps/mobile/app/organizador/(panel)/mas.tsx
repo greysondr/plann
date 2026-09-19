@@ -3,6 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useRouter } from "expo-router";
 import { GlassCard } from "../../../src/components/GlassCard";
 import { OrganizerHeader } from "../../../src/components/OrganizerHeader";
+import { InfoTip } from "../../../src/components/InfoTip";
 import { ChevronRight } from "../../../src/components/icons";
 import { useAppStore } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
@@ -11,13 +12,14 @@ import { setLastMode } from "../../../src/lib/mode";
 import { formatUsd } from "../../../src/core/pricing";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
 
-function Row({ label, hint, badge, onPress }: { label: string; hint?: string; badge?: number; onPress: () => void }) {
+function Row({ label, hint, badge, onPress, help }: { label: string; hint?: string; badge?: number; onPress: () => void; help?: boolean }) {
   return (
     <Pressable style={styles.row} onPress={onPress}>
       <View style={{ flex: 1 }}>
         <Text style={styles.rowLabel}>{label}</Text>
         {hint && <Text style={styles.rowHint}>{hint}</Text>}
       </View>
+      {help && <InfoTip label={label} size={16} />}
       {!!badge && badge > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge > 9 ? "9+" : badge}</Text>
@@ -84,7 +86,7 @@ export default function MasScreen() {
               {tools.map((tool, i) => (
                 <View key={tool.id}>
                   {i > 0 && <Divider />}
-                  <Row label={tool.label} hint={hints[tool.id] ?? tool.hint} badge={badges[tool.id]} onPress={() => router.push(tool.route as never)} />
+                  <Row help label={tool.label} hint={hints[tool.id] ?? tool.hint} badge={badges[tool.id]} onPress={() => router.push(tool.route as never)} />
                 </View>
               ))}
             </GlassCard>

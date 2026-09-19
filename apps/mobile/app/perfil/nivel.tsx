@@ -7,6 +7,7 @@ import { ChevronRight, StarIcon } from "../../src/components/icons";
 import { useAppStore } from "../../src/context/AppStore";
 import { LOYALTY_TIERS } from "../../src/core/loyalty";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 export default function NivelScreen() {
   const insets = useSafeAreaInsets();
@@ -22,7 +23,7 @@ export default function NivelScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Puntos Plann</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Mi nivel y puntos" size={18} />
       </View>
 
       <View style={styles.section}>

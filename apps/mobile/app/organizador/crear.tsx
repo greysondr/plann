@@ -18,6 +18,7 @@ import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { formatShortDate } from "../../src/utils/format";
 import { fromCalendarDateString, toCalendarDateString } from "../../src/utils/eventFilters";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 
 const TIME_SLOTS = [
@@ -99,7 +100,7 @@ export default function CrearEventoScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Publicar evento</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Nuevo evento" size={18} />
       </View>
 
       <View style={styles.section}>

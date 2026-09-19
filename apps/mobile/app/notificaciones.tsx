@@ -7,6 +7,7 @@ import { ChevronRight } from "../src/components/icons";
 import { useAppStore, type AppNotification } from "../src/context/AppStore";
 import { timeAgo } from "../src/utils/format";
 import { color, fontFamily, spacing } from "../src/theme/tokens";
+import { InfoTip } from "../src/components/InfoTip";
 
 export default function NotificacionesScreen() {
   const insets = useSafeAreaInsets();
@@ -28,7 +29,7 @@ export default function NotificacionesScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Notificaciones</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Notificaciones" size={18} />
       </View>
 
       {unreadCount > 0 && (

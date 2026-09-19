@@ -11,6 +11,7 @@ import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { dayKey, eventSettlements, isPaid } from "../../src/core/orgAnalytics";
 import { formatUsd } from "../../src/core/pricing";
 import { color, fontFamily, spacing } from "../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../src/components/InfoTip";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const csv = (v: string | number) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
@@ -72,7 +73,7 @@ export default function ReportesScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Reportes</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Reportes" size={18} />
       </View>
 
       {!month || !data ? (
@@ -102,7 +103,7 @@ export default function ReportesScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Por evento</Text>
+            <HelpTitle style={styles.sectionTitle}>Por evento</HelpTitle>
             <View style={{ gap: 10 }}>
               {data.settle.map((s) => (
                 <GlassCard key={s.eventId} level="card">

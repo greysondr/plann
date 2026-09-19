@@ -10,6 +10,7 @@ import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { compareEvents } from "../../src/core/orgAnalytics";
 import { formatUsd } from "../../src/core/pricing";
 import { color, fontFamily, spacing } from "../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../src/components/InfoTip";
 
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 
@@ -40,7 +41,7 @@ export default function CompararScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Comparar eventos</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Comparar eventos" size={18} />
       </View>
 
       {rows.length === 0 ? (
@@ -50,7 +51,7 @@ export default function CompararScreen() {
       ) : (
         <>
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ingresos netos</Text>
+            <HelpTitle style={styles.sectionTitle}>Ingresos netos</HelpTitle>
             <GlassCard level="card">
               <View style={{ padding: 16 }}>
                 <BarList data={rows.map((r) => ({ name: r.title, value: r.netCents }))} format={formatUsd} />

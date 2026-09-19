@@ -10,6 +10,7 @@ import { useAppStore } from "../../src/context/AppStore";
 import { BUYER_FAQ, ORGANIZER_FAQ, SUPPORT_CATEGORIES } from "../../src/core/support";
 import { formatShortDate } from "../../src/utils/format";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 const STATUS: Record<string, string> = { abierto: "Abierto", en_proceso: "En proceso", resuelto: "Resuelto", cerrado: "Cerrado" };
 const WHATSAPP = process.env.EXPO_PUBLIC_SUPPORT_WHATSAPP ?? "";
@@ -53,7 +54,7 @@ export default function SoporteScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Ayuda y soporte</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Ayuda y soporte" size={18} />
       </View>
 
       <View style={styles.section}>

@@ -9,6 +9,7 @@ import { useAppStore, type SupportMessage } from "../../src/context/AppStore";
 import { timeAgo } from "../../src/utils/format";
 import { supabase } from "../../src/lib/supabase";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 const STATUS: Record<string, string> = { abierto: "Abierto", en_proceso: "En proceso", resuelto: "Resuelto", cerrado: "Cerrado" };
 
@@ -60,7 +61,7 @@ export default function TicketScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Consulta</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Consulta" size={18} />
       </View>
 
       <View style={styles.section}>

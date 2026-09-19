@@ -23,3 +23,10 @@ test("agrupa en orden y omite grupos vacíos", () => {
   assert.deepEqual(groups, ["Eventos", "Ventas y dinero", "Crecimiento", "Equipo y cuenta"]);
   assert.equal(groupTools([]).length, 0);
 });
+
+import { getHelp } from "./help";
+import { ORG_TOOLS } from "./orgTools";
+
+test("cada herramienta tiene su explicación para el signo ⓘ", () => {
+  for (const tool of ORG_TOOLS) assert.ok(getHelp(tool.label), `falta ayuda para «${tool.label}»`);
+});

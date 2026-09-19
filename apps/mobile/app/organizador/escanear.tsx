@@ -8,6 +8,7 @@ import { PrimaryButton } from "../../src/components/Button";
 import { useAppStore, useEvent } from "../../src/context/AppStore";
 import { useDoorGuard } from "../../src/hooks/useDoorGuard";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 type Result = { status: "valid" | "used" | "invalid"; name?: string; time?: string } | null;
 
@@ -78,7 +79,7 @@ export default function EscanearScreen() {
             </Text>
           )}
         </View>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Escanear entradas" size={18} />
       </View>
 
       <View style={styles.cameraWrap}>

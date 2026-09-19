@@ -21,6 +21,7 @@ import { dayEndIso, dayStartIso, isoToVeDay } from "../../../src/core/ticketSale
 import { TicketDraftEditor, draftToTicket, newDraft, type TicketDraft } from "../../../src/components/TicketTypesForm";
 import type { TicketType } from "../../../src/core/types";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../../src/components/InfoTip";
 
 const TIME_SLOTS = [
   { label: "10:00 a.m.", hour: 10, minute: 0 },
@@ -238,7 +239,7 @@ export default function EditarEventoScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Editar evento</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Editar evento" size={18} />
       </View>
 
       {cancelled ? (
@@ -357,7 +358,7 @@ export default function EditarEventoScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Entradas</Text>
+            <HelpTitle style={styles.sectionTitle}>Entradas</HelpTitle>
             <View style={{ gap: 12 }}>
               {event.ticketTypes.map((tt) => (
                 <TicketTypeEditor key={tt.id} ticketType={tt} />
@@ -367,7 +368,7 @@ export default function EditarEventoScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ofertas y comunidad</Text>
+            <HelpTitle style={styles.sectionTitle}>Ofertas y comunidad</HelpTitle>
             <GlassCard level="card">
               <Pressable style={{ padding: 16 }} onPress={() => router.push(`/organizador/ofertas/${event.id}`)}>
                 <Text style={{ fontFamily: fontFamily.bold, fontSize: 14.5, color: color.text }}>Oferta de última hora y evento comunitario</Text>
@@ -377,7 +378,7 @@ export default function EditarEventoScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Ventas</Text>
+            <HelpTitle style={styles.sectionTitle}>Ventas</HelpTitle>
             <GlassCard level="card">
               <View style={{ padding: 14, gap: 10 }}>
                 <Text style={styles.ticketName}>{event.salesPaused ? "Las ventas están pausadas" : "Las ventas están abiertas"}</Text>
@@ -395,7 +396,7 @@ export default function EditarEventoScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Cancelar evento</Text>
+            <HelpTitle style={styles.sectionTitle}>Cancelar evento</HelpTitle>
             <GlassCard level="card">
               <View style={{ padding: 14, gap: 10 }}>
                 {!confirmingCancel ? (

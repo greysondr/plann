@@ -11,6 +11,7 @@ import { attendance, checkinsByHour, cumulativeTickets, eventSettlements, funnel
 import { formatUsd } from "../../../src/core/pricing";
 import { formatEventDate } from "../../../src/utils/format";
 import { color, fontFamily, spacing } from "../../../src/theme/tokens";
+import { HelpTitle, InfoTip } from "../../../src/components/InfoTip";
 
 export default function AnaliticasEventoScreen() {
   const allowed = useOrganizerGuard();
@@ -57,7 +58,7 @@ export default function AnaliticasEventoScreen() {
         <Text style={styles.title} numberOfLines={1}>
           Analíticas
         </Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Analíticas del evento" size={18} />
       </View>
 
       <View style={styles.section}>
@@ -87,7 +88,7 @@ export default function AnaliticasEventoScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Evolución de ventas</Text>
+        <HelpTitle style={styles.sectionTitle}>Evolución de ventas</HelpTitle>
         <GlassCard level="card">
           <View style={{ padding: 16 }}>
             {data.trend.length === 0 ? (
@@ -101,7 +102,7 @@ export default function AnaliticasEventoScreen() {
 
       {data.views > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Visitas por día</Text>
+          <HelpTitle style={styles.sectionTitle}>Visitas por día</HelpTitle>
           <GlassCard level="card">
             <View style={{ padding: 16 }}>
               <ColumnChart data={data.viewsSeries.slice(-14).map((v) => ({ label: v.label, value: v.views }))} />
@@ -125,7 +126,7 @@ export default function AnaliticasEventoScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Por tipo de entrada</Text>
+        <HelpTitle style={styles.sectionTitle}>Por tipo de entrada</HelpTitle>
         <GlassCard level="card">
           <View style={{ padding: 16, gap: 16 }}>
             {event.ticketTypes.map((t) => {
@@ -155,7 +156,7 @@ export default function AnaliticasEventoScreen() {
 
       {data.arrivals.length > 0 && (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Llegada de asistentes</Text>
+          <HelpTitle style={styles.sectionTitle}>Llegada de asistentes</HelpTitle>
           <GlassCard level="card">
             <View style={{ padding: 16 }}>
               <ColumnChart data={data.arrivals.map((a) => ({ label: a.label, value: a.count }))} />
@@ -198,7 +199,10 @@ function Kpi({ label, value, hint }: { label: string; value: string; hint?: stri
   return (
     <GlassCard level="card" style={{ width: "47.5%" }}>
       <View style={{ padding: 14, gap: 4 }}>
-        <Text style={styles.meta}>{label}</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={styles.meta}>{label}</Text>
+          <InfoTip label={label} size={14} />
+        </View>
         <Text style={styles.kpiValue}>{value}</Text>
         {hint && (
           <Text style={styles.meta} numberOfLines={1}>

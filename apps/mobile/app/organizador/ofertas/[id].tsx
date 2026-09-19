@@ -9,6 +9,7 @@ import { useAppStore, useEvent } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { formatUsd } from "../../../src/core/pricing";
 import { color, fontFamily, spacing } from "../../../src/theme/tokens";
+import { InfoTip } from "../../../src/components/InfoTip";
 
 const PCTS = [10, 20, 30, 50];
 const HOURS = [6, 12, 24, 48];
@@ -38,7 +39,7 @@ export default function OfertasScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Ofertas y comunidad</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Ofertas y comunidad" size={18} />
       </View>
 
       {!event ? (

@@ -11,6 +11,7 @@ import { useAppStore } from "../../src/context/AppStore";
 import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import type { PaymentMethod } from "../../src/core/types";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+import { InfoTip } from "../../src/components/InfoTip";
 
 const METHODS: { id: PaymentMethod; label: string; hint: string }[] = [
   { id: "pago_movil", label: "Pago Móvil", hint: "Banco, teléfono y cédula" },
@@ -73,7 +74,7 @@ export default function NegocioScreen() {
           </View>
         </Pressable>
         <Text style={styles.title}>Mi negocio</Text>
-        <View style={{ width: 18 }} />
+        <InfoTip label="Mi negocio" size={18} />
       </View>
 
       <View style={styles.section}>
