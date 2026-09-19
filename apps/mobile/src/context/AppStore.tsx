@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { cancelEventReminder, scheduleEventReminder } from "../lib/notifications";
 import { FIRST_PURCHASE_BONUS, getTierForPoints, type LoyaltyTier } from "../core/loyalty";
+import type { OrderRow, TicketRow } from "../core/orgAnalytics";
 import type {
   EventItem,
   LoyaltyEntry,
@@ -81,9 +82,23 @@ interface CreateOrderResult {
 export interface OrganizerProfile {
   name: string;
   document: string;
+  bio?: string;
+  phone?: string;
+  logoUrl?: string;
+  plan: "basico" | "pro" | "business";
+  commissionRate: number;
   rejectionReason?: string;
   payoutMethod?: PaymentMethod;
   payoutAccount?: string;
+}
+
+export interface OrganizerProfileInput {
+  name: string;
+  bio: string;
+  phone: string;
+  payoutMethod?: PaymentMethod;
+  payoutAccount: string;
+  logoUri?: string;
 }
 
 export interface Withdrawal {
@@ -169,6 +184,8 @@ interface AppStoreValue {
   myOrganizerId: string | null;
   balance: OrganizerBalance;
   withdrawals: Withdrawal[];
+  analyticsOrders: OrderRow[];
+  analyticsTickets: TicketRow[];
   staff: StaffMember[];
   staffAssignments: StaffAssignment[];
 
@@ -188,6 +205,9 @@ interface AppStoreValue {
   requestOrganizerVerification: (name: string, document: string) => Promise<void>;
   createEvent: (input: NewEventInput) => Promise<boolean>;
   updateEvent: (eventId: string, input: EventEditInput) => Promise<Result>;
+  publishEvent: (eventId: string) => Promise<Result>;
+  duplicateEvent: (eventId: string) => Promise<{ ok: boolean; eventId?: string; reason?: string }>;
+  updateOrganizerProfile: (input: OrganizerProfileInput) => Promise<Result>;
   updateTicketType: (ticketTypeId: string, name: string, priceCents: number, quantity: number) => Promise<Result>;
   addTicketType: (eventId: string, ticket: NewTicketInput) => Promise<Result>;
   deleteTicketType: (ticketTypeId: string) => Promise<Result>;
@@ -226,6 +246,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [myOrganizerId, setMyOrganizerId] = useState<string | null>(null);
   const [balance, setBalance] = useState<OrganizerBalance>({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [analyticsOrders, setAnalyticsOrders] = useState<OrderRow[]>([]);
+  const [analyticsTickets, setAnalyticsTickets] = useState<TicketRow[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
@@ -336,7 +358,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const fetchMyOrganizer = useCallback(async (uid: string) => {
     const { data } = await supabase
       .from("organizers")
-      .select("id, name, legal_document, verification_status, rejection_reason, payout_method, payout_account")
+      .select("id, name, legal_document, verification_status, rejection_reason, payout_method, payout_account, bio, contact_phone, logo_url, plan, commission_rate")
       .eq("owner_user_id", uid)
       .maybeSingle();
     if (data) {
@@ -345,6 +367,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       setOrganizerProfile({
         name: data.name,
         document: data.legal_document ?? "",
+        bio: data.bio ?? undefined,
+        phone: data.contact_phone ?? undefined,
+        logoUrl: data.logo_url ?? undefined,
+        plan: data.plan,
+        commissionRate: Number(data.commission_rate),
         rejectionReason: data.rejection_reason ?? undefined,
         payoutMethod: (data.payout_method as PaymentMethod) ?? undefined,
         payoutAccount: data.payout_account ?? undefined,
@@ -435,6 +462,39 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         requestedAt: w.requested_at,
       }))
     );
+  }, []);
+
+  // --- Datos para las analíticas del organizador: todas las órdenes y tickets de
+  // mis eventos, pedidos por páginas (PostgREST corta cada respuesta en 1000 filas).
+  const fetchAnalytics = useCallback(async (eventIds: string[]) => {
+    if (eventIds.length === 0) {
+      setAnalyticsOrders([]);
+      setAnalyticsTickets([]);
+      return;
+    }
+    async function pageAll(table: string, columns: string): Promise<any[]> {
+      const rows: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data } = await supabase
+          .from(table)
+          .select(columns)
+          .in("event_id", eventIds)
+          .order("created_at", { ascending: false })
+          .range(from, from + 999);
+        rows.push(...(data ?? []));
+        if (!data || data.length < 1000) break;
+      }
+      return rows;
+    }
+    const [orderRows, ticketRows] = await Promise.all([
+      pageAll(
+        "orders",
+        "id, user_id, event_id, ticket_type_id, quantity, status, subtotal_cents, total_usd_cents, commission_cents, organizer_net_cents, currency_paid, created_at, paid_at"
+      ),
+      pageAll("tickets", "id, event_id, ticket_type_id, status, checked_in_at, created_at"),
+    ]);
+    setAnalyticsOrders(orderRows as OrderRow[]);
+    setAnalyticsTickets(ticketRows as TicketRow[]);
   }, []);
 
   // --- Equipo de puerta: los que yo agregué (si soy organizador) y los
@@ -534,6 +594,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setOrganizerProfile(null);
         setMyOrganizerId(null);
         setOrganizerOrders([]);
+        setAnalyticsOrders([]);
+        setAnalyticsTickets([]);
         setStaff([]);
         setStaffAssignments([]);
         setBalance({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
@@ -610,6 +672,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     fetchBalance(myOrganizerId);
   }, [myOrganizerId, organizerOrders, fetchBalance]);
 
+  const myEventIdsKey = myEventIds.join(",");
+  useEffect(() => {
+    fetchAnalytics(myEventIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myEventIdsKey, fetchAnalytics]);
+
   useEffect(() => {
     if (userId) fetchStaff(userId, myOrganizerId);
   }, [userId, myOrganizerId, fetchStaff]);
@@ -646,12 +714,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       .channel(`plann-organizer-orders-${myOrganizerId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, () => {
         fetchOrganizerOrders(myOrganizerId, myEventIds);
+        fetchAnalytics(myEventIds);
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [myOrganizerId, myEventIds, fetchOrganizerOrders]);
+  }, [myOrganizerId, myEventIds, fetchOrganizerOrders, fetchAnalytics]);
 
   // --- Auth -------------------------------------------------------------------
   const signUp = useCallback(async (email: string, password: string, fullName: string) => {
@@ -869,6 +938,87 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     [myOrganizerId, fetchEvents]
   );
 
+  const publishEvent = useCallback(
+    async (eventId: string): Promise<Result> => {
+      const { error } = await supabase.from("events").update({ status: "published" }).eq("id", eventId).eq("status", "draft");
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo publicar el evento.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const duplicateEvent = useCallback(
+    async (eventId: string): Promise<{ ok: boolean; eventId?: string; reason?: string }> => {
+      if (!myOrganizerId) return { ok: false };
+      const { data: src } = await supabase
+        .from("events")
+        .select("title, kind, category_id, city_id, description, images, venue_name, venue_address, venue_lat, venue_lng, starts_at, ends_at, refund_policy, min_age, ticket_types(name, price_cents, quantity, min_per_order, max_per_order)")
+        .eq("id", eventId)
+        .eq("organizer_id", myOrganizerId)
+        .single();
+      if (!src) return { ok: false, reason: "No encontramos el evento." };
+      const shift = 7 * 24 * 3600 * 1000;
+      const { data: copy, error } = await supabase
+        .from("events")
+        .insert({
+          organizer_id: myOrganizerId,
+          title: `${src.title} (copia)`,
+          slug: `${slugify(src.title)}-${Date.now().toString(36)}`,
+          kind: src.kind,
+          category_id: src.category_id,
+          city_id: src.city_id,
+          description: src.description,
+          images: src.images,
+          venue_name: src.venue_name,
+          venue_address: src.venue_address,
+          venue_lat: src.venue_lat,
+          venue_lng: src.venue_lng,
+          starts_at: new Date(new Date(src.starts_at).getTime() + shift).toISOString(),
+          ends_at: src.ends_at ? new Date(new Date(src.ends_at).getTime() + shift).toISOString() : null,
+          status: "draft",
+          refund_policy: src.refund_policy,
+          min_age: src.min_age,
+          source: "organizer",
+        })
+        .select("id")
+        .single();
+      if (error || !copy) return { ok: false, reason: dbErrorMessage(error?.message, "No se pudo duplicar el evento.") };
+      const types = (src.ticket_types ?? []) as any[];
+      if (types.length > 0) {
+        await supabase.from("ticket_types").insert(types.map((t) => ({ ...t, event_id: copy.id })));
+      }
+      await fetchEvents(myOrganizerId);
+      return { ok: true, eventId: copy.id };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const updateOrganizerProfile = useCallback(
+    async (input: OrganizerProfileInput): Promise<Result> => {
+      if (!myOrganizerId || !userId) return { ok: false };
+      const update: Record<string, unknown> = {
+        name: input.name,
+        bio: input.bio || null,
+        contact_phone: input.phone || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (input.payoutMethod) {
+        update.payout_method = input.payoutMethod;
+        update.payout_account = input.payoutAccount || null;
+      }
+      if (input.logoUri) {
+        const url = await uploadEventImage(input.logoUri, myOrganizerId);
+        if (url) update.logo_url = url;
+      }
+      const { error } = await supabase.from("organizers").update(update).eq("id", myOrganizerId);
+      if (error) return { ok: false, reason: "No se pudo guardar tu perfil." };
+      await fetchMyOrganizer(userId);
+      return { ok: true };
+    },
+    [myOrganizerId, userId, fetchMyOrganizer]
+  );
+
   const updateEvent = useCallback(
     async (eventId: string, input: EventEditInput): Promise<Result> => {
       const { error } = await supabase
@@ -1037,6 +1187,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       myOrganizerId,
       balance,
       withdrawals,
+      analyticsOrders,
+      analyticsTickets,
       staff,
       staffAssignments,
       rateApplied,
@@ -1053,6 +1205,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       requestOrganizerVerification,
       createEvent,
       updateEvent,
+      publishEvent,
+      duplicateEvent,
+      updateOrganizerProfile,
       updateTicketType,
       addTicketType,
       deleteTicketType,
@@ -1083,6 +1238,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       myOrganizerId,
       balance,
       withdrawals,
+      analyticsOrders,
+      analyticsTickets,
       staff,
       staffAssignments,
       rateApplied,
@@ -1099,6 +1256,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       requestOrganizerVerification,
       createEvent,
       updateEvent,
+      publishEvent,
+      duplicateEvent,
+      updateOrganizerProfile,
       updateTicketType,
       addTicketType,
       deleteTicketType,

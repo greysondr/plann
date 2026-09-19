@@ -68,7 +68,7 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
         <Card className="flex items-center gap-3 border-warning/30 bg-warning-soft px-5 py-3.5">
           <AlertTriangle size={18} className="shrink-0 text-warning" />
           <p className="text-[13.5px] text-foreground">
-            <span className="font-bold">{pendingPayments}</span> {pendingPayments === 1 ? "compra está" : "compras están"} pendientes de pago o en
+            <span className="font-bold">{pendingPayments}</span> {pendingPayments === 1 ? "compra está pendiente" : "compras están pendientes"} de pago o en
             verificación. Se acreditan a tu saldo cuando Plann confirma el pago.
           </p>
         </Card>

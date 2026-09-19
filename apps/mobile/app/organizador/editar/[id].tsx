@@ -136,7 +136,7 @@ export default function EditarEventoScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const event = useEvent(id);
-  const { updateEvent, setSalesPaused, cancelEvent, organizerOrders } = useAppStore();
+  const { updateEvent, publishEvent, setSalesPaused, cancelEvent, organizerOrders } = useAppStore();
 
   const original = event ? new Date(event.startsAt) : null;
   const originalSlot = original ? TIME_SLOTS.findIndex((s) => s.hour === original.getHours() && s.minute === original.getMinutes()) : -1;
@@ -222,6 +222,17 @@ export default function EditarEventoScreen() {
         </View>
       ) : (
         <>
+          {event.status === "draft" && (
+            <View style={styles.section}>
+              <GlassCard level="card">
+                <View style={{ padding: 14, gap: 10 }}>
+                  <Text style={styles.ticketName}>Borrador</Text>
+                  <Text style={styles.hint}>Este evento todavía no es visible en la app. Revisa los detalles y publícalo cuando esté listo.</Text>
+                  <PrimaryButton label="Publicar evento" onPress={() => publishEvent(event.id)} />
+                </View>
+              </GlassCard>
+            </View>
+          )}
           <View style={styles.section}>
             <Text style={styles.eventName}>{event.title}</Text>
             <Text style={styles.hint}>{formatEventDate(event.startsAt)}</Text>
