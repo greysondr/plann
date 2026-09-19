@@ -65,6 +65,9 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
   sales_paused: "El organizador pausó las ventas de este evento.",
+  sales_not_started: "La venta de esta entrada todavía no empieza.",
+  sales_ended: "La venta de esta entrada ya terminó.",
+  ticket_sales_window_valid: "La fecha de cierre debe ser posterior a la de apertura.",
   coupon_invalid: "Ese código no existe o no aplica a este evento.",
   coupon_expired: "Ese cupón ya venció o todavía no está activo.",
   coupon_exhausted: "Ese cupón ya se agotó.",
@@ -142,6 +145,8 @@ export interface NewTicketInput {
   name: string;
   priceCents: number; // 0 = gratis
   quantity: number;
+  salesStart?: string | null; // ISO
+  salesEnd?: string | null; // ISO
 }
 
 export interface AppNotification {
@@ -265,7 +270,7 @@ interface AppStoreValue {
   publishEvent: (eventId: string) => Promise<Result>;
   duplicateEvent: (eventId: string) => Promise<{ ok: boolean; eventId?: string; reason?: string }>;
   updateOrganizerProfile: (input: OrganizerProfileInput) => Promise<Result>;
-  updateTicketType: (ticketTypeId: string, name: string, priceCents: number, quantity: number) => Promise<Result>;
+  updateTicketType: (ticketTypeId: string, name: string, priceCents: number, quantity: number, window?: { salesStart: string | null; salesEnd: string | null }) => Promise<Result>;
   addTicketType: (eventId: string, ticket: NewTicketInput) => Promise<Result>;
   deleteTicketType: (ticketTypeId: string) => Promise<Result>;
   addStaff: (email: string) => Promise<Result>;
@@ -346,6 +351,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       reserved: tt.reserved,
       minPerOrder: tt.min_per_order,
       maxPerOrder: tt.max_per_order,
+      salesStart: tt.sales_start ?? undefined,
+      salesEnd: tt.sales_end ?? undefined,
     }));
     const durationMinutes = row.ends_at
       ? Math.max(30, Math.round((new Date(row.ends_at).getTime() - new Date(row.starts_at).getTime()) / 60000))
@@ -1075,6 +1082,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           name: t.name,
           price_cents: t.priceCents,
           quantity: t.quantity,
+          sales_start: t.salesStart ?? null,
+          sales_end: t.salesEnd ?? null,
           min_per_order: 1,
           max_per_order: 6,
         }))
@@ -1274,10 +1283,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const updateTicketType = useCallback(
-    async (ticketTypeId: string, name: string, priceCents: number, quantity: number): Promise<Result> => {
+    async (ticketTypeId: string, name: string, priceCents: number, quantity: number, window?: { salesStart: string | null; salesEnd: string | null }): Promise<Result> => {
+      const update: Record<string, unknown> = { name, price_cents: priceCents, quantity, updated_at: new Date().toISOString() };
+      if (window) {
+        update.sales_start = window.salesStart;
+        update.sales_end = window.salesEnd;
+      }
       const { error } = await supabase
         .from("ticket_types")
-        .update({ name, price_cents: priceCents, quantity, updated_at: new Date().toISOString() })
+        .update(update)
         .eq("id", ticketTypeId);
       if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar la entrada.") };
       await fetchEvents(myOrganizerId);
@@ -1293,6 +1307,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         name: ticket.name,
         price_cents: ticket.priceCents,
         quantity: ticket.quantity,
+        sales_start: ticket.salesStart ?? null,
+        sales_end: ticket.salesEnd ?? null,
         min_per_order: 1,
         max_per_order: 6,
       });

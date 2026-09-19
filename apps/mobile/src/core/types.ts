@@ -25,6 +25,8 @@ export interface TicketType {
   reserved: number;
   minPerOrder: number;
   maxPerOrder: number;
+  salesStart?: string; // ISO; sin valor = ya abierta
+  salesEnd?: string; // ISO; sin valor = hasta agotar o hasta el evento
 }
 
 export type RefundPolicy = "none" | "24h" | "72h" | "always";

@@ -14,6 +14,8 @@ import { formatEventDate, formatShortDate } from "../../../src/utils/format";
 import { fromCalendarDateString, toCalendarDateString } from "../../../src/utils/eventFilters";
 import { EventPhotoField } from "../../../src/components/EventPhotoField";
 import { LocationPicker, type LatLng } from "../../../src/components/LocationPicker";
+import { DayField } from "../../../src/components/DayField";
+import { dayEndIso, dayStartIso, isoToVeDay } from "../../../src/core/ticketSales";
 import { TicketDraftEditor, draftToTicket, newDraft, type TicketDraft } from "../../../src/components/TicketTypesForm";
 import type { TicketType } from "../../../src/core/types";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
@@ -32,6 +34,8 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
   const [name, setName] = useState(ticketType.name);
   const [price, setPrice] = useState((ticketType.priceCents / 100).toString());
   const [quantity, setQuantity] = useState(String(ticketType.quantity));
+  const [startDay, setStartDay] = useState(ticketType.salesStart ? isoToVeDay(ticketType.salesStart) : "");
+  const [endDay, setEndDay] = useState(ticketType.salesEnd ? isoToVeDay(ticketType.salesEnd) : "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<Message>(null);
 
@@ -42,8 +46,16 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
     Number.isFinite(priceCents) &&
     priceCents >= 0 &&
     Number.isInteger(quantityNum) &&
-    quantityNum >= ticketType.sold + ticketType.reserved;
-  const changed = name.trim() !== ticketType.name || priceCents !== ticketType.priceCents || quantityNum !== ticketType.quantity;
+    quantityNum >= ticketType.sold + ticketType.reserved &&
+    !(startDay && endDay && endDay < startDay);
+  const startIso = startDay ? dayStartIso(startDay) : null;
+  const endIso = endDay ? dayEndIso(endDay) : null;
+  const changed =
+    name.trim() !== ticketType.name ||
+    priceCents !== ticketType.priceCents ||
+    quantityNum !== ticketType.quantity ||
+    (startIso ?? null) !== (ticketType.salesStart ?? null) ||
+    (endIso ?? null) !== (ticketType.salesEnd ?? null);
   const canDelete = ticketType.sold === 0 && ticketType.reserved === 0;
 
   async function remove() {
@@ -55,7 +67,7 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
   async function save() {
     setSaving(true);
     setMessage(null);
-    const result = await updateTicketType(ticketType.id, name.trim(), priceCents, quantityNum);
+    const result = await updateTicketType(ticketType.id, name.trim(), priceCents, quantityNum, { salesStart: startIso, salesEnd: endIso });
     setSaving(false);
     setMessage(result.ok ? { text: "Entrada actualizada.", error: false } : { text: result.reason ?? "No se pudo guardar.", error: true });
   }
@@ -77,6 +89,8 @@ function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
             <TextInput value={quantity} onChangeText={setQuantity} keyboardType="number-pad" style={styles.input} placeholderTextColor={color.text4} />
           </View>
         </View>
+        <DayField label="Venta desde" value={startDay} onChange={setStartDay} emptyText="Abierta desde ya" />
+        <DayField label="Venta hasta" value={endDay} onChange={setEndDay} emptyText="Hasta agotar" minDay={startDay || undefined} />
         {!valid && quantityNum < ticketType.sold + ticketType.reserved && (
           <Text style={styles.messageError}>El cupo no puede ser menor a {ticketType.sold + ticketType.reserved}, lo que ya se vendió o está reservado.</Text>
         )}

@@ -5,7 +5,7 @@ import { draftToTicket, validDrafts, type TicketDraft } from "./ticketDrafts";
 const draft = (over: Partial<TicketDraft> = {}): TicketDraft => ({ key: "k", name: "General", price: "10", quantity: "50", ...over });
 
 test("convierte precio en dólares a centavos", () => {
-  assert.deepEqual(draftToTicket(draft({ price: "12,50" })), { name: "General", priceCents: 1250, quantity: 50 });
+  assert.deepEqual(draftToTicket(draft({ price: "12,50" })), { name: "General", priceCents: 1250, quantity: 50, salesStart: null, salesEnd: null });
 });
 
 test("precio vacío significa gratis", () => {
@@ -26,4 +26,13 @@ test("no acepta dos entradas con el mismo nombre", () => {
 
 test("exige al menos una entrada", () => {
   assert.equal(validDrafts([]), null);
+});
+
+test("convierte las fechas de venta a hora de Venezuela y exige cierre posterior a la apertura", () => {
+  const ok = draftToTicket(draft({ startDay: "2026-09-20", endDay: "2026-09-25" }));
+  assert.equal(ok?.salesStart, "2026-09-20T04:00:00.000Z");
+  assert.equal(ok?.salesEnd, "2026-09-26T03:59:59.000Z");
+  assert.equal(draftToTicket(draft({ startDay: "2026-09-25", endDay: "2026-09-20" })), null);
+  assert.equal(draftToTicket(draft({ startDay: "2026-09-20", endDay: "2026-09-20" }))?.salesEnd, "2026-09-21T03:59:59.000Z");
+  assert.equal(draftToTicket(draft())?.salesStart, null);
 });

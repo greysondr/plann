@@ -9,6 +9,8 @@ export interface TicketTypeRow {
   quantity: number;
   sold: number;
   reserved: number;
+  sales_start: string | null;
+  sales_end: string | null;
 }
 
 export interface EventRow {
@@ -59,7 +61,7 @@ async function fetchAll<T>(build: (from: number, to: number) => PromiseLike<{ da
 }
 
 const EVENT_COLUMNS =
-  "id, title, slug, status, starts_at, ends_at, images, description, venue_name, sales_paused, cancelled_reason, ticket_types(id, name, price_cents, quantity, sold, reserved), categories(name), cities(name)";
+  "id, title, slug, status, starts_at, ends_at, images, description, venue_name, sales_paused, cancelled_reason, ticket_types(id, name, price_cents, quantity, sold, reserved, sales_start, sales_end), categories(name), cities(name)";
 
 export async function loadEvents(organizerId: string): Promise<EventRow[]> {
   const supabase = await supabaseServer();

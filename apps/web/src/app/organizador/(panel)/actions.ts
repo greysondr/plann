@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireOrganizer } from "@/lib/org/session";
 import type { FormState } from "@/app/organizador/actions";
+import { dayEndIso, dayStartIso } from "@/lib/format";
 
 const DB_ERRORS: Record<string, string> = {
   insufficient_balance: "No tienes saldo suficiente para ese monto.",
@@ -18,6 +19,7 @@ const DB_ERRORS: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   not_authorized: "No tienes permiso para hacer esto.",
   sold_out: "No quedan entradas suficientes de ese tipo.",
+  ticket_sales_window_valid: "La fecha de cierre debe ser posterior a la de apertura.",
   message_length: "El mensaje debe tener entre 5 y 500 caracteres.",
   announcement_limit: "Ya enviaste 3 mensajes a este evento hoy. Intenta mañana.",
 };
@@ -58,6 +60,17 @@ export interface TicketInput {
   name: string;
   priceCents: number;
   quantity: number;
+  salesStart: string | null;
+  salesEnd: string | null;
+}
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+function parseWindow(startDay: unknown, endDay: unknown): { start: string | null; end: string | null } | string {
+  const s = String(startDay ?? "");
+  const e = String(endDay ?? "");
+  if ((s && !DAY_RE.test(s)) || (e && !DAY_RE.test(e))) return "Revisa las fechas de venta.";
+  if (s && e && e < s) return "La venta debe cerrar después de abrir.";
+  return { start: s ? dayStartIso(s) : null, end: e ? dayEndIso(e) : null };
 }
 
 function parseTickets(raw: FormDataEntryValue | null): TicketInput[] | string {
@@ -76,7 +89,9 @@ function parseTickets(raw: FormDataEntryValue | null): TicketInput[] | string {
     if (name.length < 2) return "Cada entrada necesita un nombre.";
     if (!Number.isFinite(priceCents) || priceCents < 0) return `El precio de "${name}" no es válido.`;
     if (!Number.isInteger(quantity) || quantity < 1) return `El cupo de "${name}" debe ser al menos 1.`;
-    out.push({ name, priceCents, quantity });
+    const window = parseWindow(item.startDay, item.endDay);
+    if (typeof window === "string") return `"${name}": ${window}`;
+    out.push({ name, priceCents, quantity, salesStart: window.start, salesEnd: window.end });
   }
   if (new Set(out.map((t) => t.name.toLowerCase())).size !== out.length) return "No puede haber dos entradas con el mismo nombre.";
   return out;
@@ -155,7 +170,7 @@ export async function createEventAction(_prev: FormState, formData: FormData): P
   if (error || !event) return { error: dbError(error?.message, "No pudimos crear el evento. Intenta de nuevo.") };
 
   const { error: ttError } = await supabase.from("ticket_types").insert(
-    tickets.map((t) => ({ event_id: event.id, name: t.name, price_cents: t.priceCents, quantity: t.quantity, min_per_order: 1, max_per_order: 6 }))
+    tickets.map((t) => ({ event_id: event.id, name: t.name, price_cents: t.priceCents, quantity: t.quantity, sales_start: t.salesStart, sales_end: t.salesEnd, min_per_order: 1, max_per_order: 6 }))
   );
   if (ttError) return { error: "El evento se creó, pero fallaron las entradas. Ábrelo y agrégalas." };
 
@@ -259,10 +274,12 @@ export async function saveTicketTypeAction(ticketTypeId: string, _prev: FormStat
   if (name.length < 2) return { error: "Escribe el nombre de la entrada." };
   if (!Number.isFinite(priceCents) || priceCents < 0) return { error: "El precio no es válido." };
   if (!Number.isInteger(quantity) || quantity < 1) return { error: "El cupo debe ser al menos 1." };
+  const window = parseWindow(formData.get("start_day"), formData.get("end_day"));
+  if (typeof window === "string") return { error: window };
   const supabase = await supabaseServer();
   const { error } = await supabase
     .from("ticket_types")
-    .update({ name, price_cents: priceCents, quantity, updated_at: new Date().toISOString() })
+    .update({ name, price_cents: priceCents, quantity, sales_start: window.start, sales_end: window.end, updated_at: new Date().toISOString() })
     .eq("id", ticketTypeId);
   if (error) return { error: dbError(error.message, "No pudimos guardar la entrada.") };
   revalidatePath("/organizador", "layout");
@@ -277,10 +294,12 @@ export async function addTicketTypeAction(eventId: string, _prev: FormState, for
   if (name.length < 2) return { error: "Escribe el nombre de la entrada." };
   if (!Number.isFinite(priceCents) || priceCents < 0) return { error: "El precio no es válido." };
   if (!Number.isInteger(quantity) || quantity < 1) return { error: "El cupo debe ser al menos 1." };
+  const window = parseWindow(formData.get("start_day"), formData.get("end_day"));
+  if (typeof window === "string") return { error: window };
   const supabase = await supabaseServer();
   const { error } = await supabase
     .from("ticket_types")
-    .insert({ event_id: eventId, name, price_cents: priceCents, quantity, min_per_order: 1, max_per_order: 6 });
+    .insert({ event_id: eventId, name, price_cents: priceCents, quantity, sales_start: window.start, sales_end: window.end, min_per_order: 1, max_per_order: 6 });
   if (error) return { error: dbError(error.message, "No pudimos agregar la entrada.") };
   revalidatePath("/organizador", "layout");
   return { ok: "Entrada agregada." };

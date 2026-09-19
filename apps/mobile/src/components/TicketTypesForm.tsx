@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Chip } from "./Chip";
+import { DayField } from "./DayField";
 import { color, fontFamily, radius } from "../theme/tokens";
 
 export { TICKET_NAME_PRESETS, newDraft, draftToTicket, validDrafts, type TicketDraft } from "../utils/ticketDrafts";
@@ -55,6 +56,9 @@ export function TicketDraftEditor({
           style={[styles.input, { flex: 0.8 }]}
         />
       </View>
+      <DayField label="Venta desde (opcional)" value={draft.startDay ?? ""} onChange={(startDay) => onChange({ ...draft, startDay })} emptyText="Abierta desde ya" />
+      <DayField label="Venta hasta (opcional)" value={draft.endDay ?? ""} onChange={(endDay) => onChange({ ...draft, endDay })} emptyText="Hasta agotar" minDay={draft.startDay || undefined} />
+      <Text style={styles.windowHint}>Úsalo para preventas: la venta abre y cierra sola en esas fechas.</Text>
     </View>
   );
 }
@@ -70,6 +74,7 @@ const styles = StyleSheet.create({
   },
   headRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, flex: 1 },
+  windowHint: { fontFamily: fontFamily.regular, fontSize: 12, color: color.text3 },
   remove: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.text3 },
   twoCols: { flexDirection: "row", gap: 10 },
   input: {

@@ -12,6 +12,7 @@ import type { FormState } from "@/app/organizador/actions";
 import { Button, Card, CardHeader } from "@/components/ui";
 import { Message } from "@/components/org/Forms";
 import type { TicketTypeRow } from "@/lib/org/data";
+import { isoToVeDay } from "@/lib/format";
 
 const inputClass =
   "w-full rounded-xl border border-border-strong bg-surface px-3.5 py-2.5 text-[14px] text-foreground outline-none placeholder:text-foreground-4 focus:border-pink";
@@ -32,8 +33,18 @@ function TicketTypeCard({ t }: { t: TicketTypeRow }) {
           <input name="quantity" defaultValue={String(t.quantity)} inputMode="numeric" className={inputClass} />
         </div>
       </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-[12px] font-bold text-foreground-3">Venta desde</label>
+          <input name="start_day" type="date" defaultValue={isoToVeDay(t.sales_start)} className={inputClass} />
+        </div>
+        <div>
+          <label className="mb-1 block text-[12px] font-bold text-foreground-3">Venta hasta</label>
+          <input name="end_day" type="date" defaultValue={isoToVeDay(t.sales_end)} className={inputClass} />
+        </div>
+      </div>
       <p className="text-[12px] text-foreground-3">
-        {t.sold} vendidas{t.reserved > 0 ? ` · ${t.reserved} reservadas` : ""}
+        {t.sold} vendidas{t.reserved > 0 ? ` · ${t.reserved} reservadas` : ""} · deja las fechas vacías para vender hasta agotar
       </p>
       <Message state={state} />
       <div className="flex items-center gap-3">
@@ -67,6 +78,10 @@ function NewTicketType({ eventId }: { eventId: string }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <input name="price" placeholder="Precio USD (vacío = gratis)" inputMode="decimal" className={inputClass} />
         <input name="quantity" placeholder="Cupo" inputMode="numeric" className={inputClass} required />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <input name="start_day" type="date" className={inputClass} aria-label="Venta desde" />
+        <input name="end_day" type="date" className={inputClass} aria-label="Venta hasta" />
       </div>
       <Message state={state} />
       <div className="flex items-center gap-3">

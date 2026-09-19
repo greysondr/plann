@@ -7,7 +7,8 @@ import { GlassCard } from "../../src/components/GlassCard";
 import { PrimaryButton, GhostPillButton } from "../../src/components/Button";
 import { ChevronRight, HeartIcon, MapPinIcon, BellIcon, StarIcon } from "../../src/components/icons";
 import { useAppStore, useEvent } from "../../src/context/AppStore";
-import { formatDuration, formatEventDate, formatRating } from "../../src/utils/format";
+import { formatDuration, formatEventDate, formatRating, formatShortDate } from "../../src/utils/format";
+import { defaultTicketType, remaining, saleState } from "../../src/core/ticketSales";
 import { formatUsd, formatBs, calculateOrderTotals } from "../../src/core/pricing";
 import { openInMaps } from "../../src/utils/maps";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
@@ -28,13 +29,12 @@ export default function EventDetailScreen() {
   const [quantity, setQuantity] = useState(1);
 
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
-  const ticketType =
-    event?.ticketTypes.find((t) => t.id === selectedTypeId) ??
-    event?.ticketTypes.find((t) => t.quantity - t.sold - t.reserved > 0) ??
-    event?.ticketTypes[0];
+  const ticketType = event?.ticketTypes.find((t) => t.id === selectedTypeId) ?? (event ? defaultTicketType(event.ticketTypes) : undefined);
   const organizer = event ? getOrganizer(event.organizerId) : undefined;
 
-  const available = ticketType ? ticketType.quantity - ticketType.sold - ticketType.reserved : 0;
+  const state = ticketType ? saleState(ticketType) : "sold_out";
+  // Fuera de la ventana de venta no hay nada que comprar, aunque sobre cupo.
+  const available = ticketType && state === "on_sale" ? remaining(ticketType) : 0;
 
   const totals = useMemo(() => {
     if (!ticketType) return null;
@@ -193,21 +193,26 @@ export default function EventDetailScreen() {
                 {event.ticketTypes.length > 1 && (
                   <View style={{ gap: 8, marginBottom: 10 }}>
                     {event.ticketTypes.map((t) => {
-                      const left = t.quantity - t.sold - t.reserved;
+                      const st = saleState(t);
+                      const left = remaining(t);
                       const selected = t.id === ticketType.id;
                       return (
                         <Pressable
                           key={t.id}
-                          disabled={left <= 0}
+                          disabled={st !== "on_sale"}
                           onPress={() => {
                             setSelectedTypeId(t.id);
                             setQuantity((q) => Math.max(t.minPerOrder, Math.min(q, t.maxPerOrder, left)));
                           }}
-                          style={[styles.typeOption, selected && styles.typeOptionSelected, left <= 0 && { opacity: 0.45 }]}
+                          style={[styles.typeOption, selected && styles.typeOptionSelected, st !== "on_sale" && { opacity: 0.5 }]}
                         >
-                          <Text style={styles.ticketName}>{t.name}</Text>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.ticketName}>{t.name}</Text>
+                            {st === "upcoming" && t.salesStart && <Text style={styles.ticketAvailability}>Abre el {formatShortDate(t.salesStart)}</Text>}
+                            {st === "on_sale" && t.salesEnd && <Text style={styles.ticketAvailability}>Hasta el {formatShortDate(t.salesEnd)}</Text>}
+                          </View>
                           <Text style={styles.ticketAvailability}>
-                            {left <= 0 ? "Agotado" : t.priceCents === 0 ? "Gratis" : formatUsd(t.priceCents)}
+                            {st === "ended" ? "Terminó" : st === "sold_out" ? "Agotado" : t.priceCents === 0 ? "Gratis" : formatUsd(t.priceCents)}
                           </Text>
                         </Pressable>
                       );
@@ -218,7 +223,13 @@ export default function EventDetailScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.ticketName}>{ticketType.name}</Text>
                     <Text style={styles.ticketAvailability}>
-                      {ticketType.priceCents === 0 ? `Gratis · Quedan ${available}` : `${formatUsd(ticketType.priceCents)} · Quedan ${available}`}
+                      {state === "upcoming" && ticketType.salesStart
+                        ? `Abre el ${formatShortDate(ticketType.salesStart)}`
+                        : state === "ended"
+                          ? "La venta terminó"
+                          : ticketType.priceCents === 0
+                            ? `Gratis · Quedan ${available}`
+                            : `${formatUsd(ticketType.priceCents)} · Quedan ${available}`}
                     </Text>
                   </View>
                   <View style={styles.stepper}>
@@ -251,7 +262,19 @@ export default function EventDetailScreen() {
               {ticketType.priceCents !== 0 && <Text style={styles.bottomPriceBs}>≈ {formatBs(totals.totalBs)} · tasa de hoy</Text>}
             </View>
             <PrimaryButton
-              label={event.status === "cancelled" ? "Cancelado" : event.salesPaused ? "Ventas pausadas" : available <= 0 ? "Agotado" : actionLabel}
+              label={
+                event.status === "cancelled"
+                  ? "Cancelado"
+                  : event.salesPaused
+                    ? "Ventas pausadas"
+                    : state === "upcoming"
+                      ? "Aún no abre"
+                      : state === "ended"
+                        ? "Venta terminada"
+                        : available <= 0
+                          ? "Agotado"
+                          : actionLabel
+              }
               disabled={available <= 0 || event.salesPaused || event.status === "cancelled"}
               onPress={() =>
                 router.push(`/checkout/${event.id}?ticketTypeId=${ticketType.id}&quantity=${quantity}`)

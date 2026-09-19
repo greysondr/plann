@@ -17,6 +17,8 @@ interface Draft {
   name: string;
   price: string;
   quantity: string;
+  startDay: string;
+  endDay: string;
 }
 
 const inputClass =
@@ -125,11 +127,21 @@ function TicketsBuilder({ drafts, setDrafts }: { drafts: Draft[]; setDrafts: (d:
             <input value={d.price} onChange={(e) => set(d.key, { price: e.target.value })} placeholder="Precio USD (vacío = gratis)" inputMode="decimal" className={inputClass} />
             <input value={d.quantity} onChange={(e) => set(d.key, { quantity: e.target.value })} placeholder="Cupo" inputMode="numeric" className={inputClass} />
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-[12px] font-bold text-foreground-3">Venta desde (opcional)</label>
+              <input type="date" value={d.startDay} onChange={(e) => set(d.key, { startDay: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[12px] font-bold text-foreground-3">Venta hasta (opcional)</label>
+              <input type="date" value={d.endDay} min={d.startDay || undefined} onChange={(e) => set(d.key, { endDay: e.target.value })} className={inputClass} />
+            </div>
+          </div>
         </div>
       ))}
       <button
         type="button"
-        onClick={() => setDrafts([...drafts, { key: Math.max(0, ...drafts.map((d) => d.key)) + 1, name: PRESETS.find((p) => !drafts.some((d) => d.name === p)) ?? "", price: "", quantity: "" }])}
+        onClick={() => setDrafts([...drafts, { key: Math.max(0, ...drafts.map((d) => d.key)) + 1, name: PRESETS.find((p) => !drafts.some((d) => d.name === p)) ?? "", price: "", quantity: "", startDay: "", endDay: "" }])}
         className="w-full rounded-full border border-dashed border-border-strong py-2.5 text-[13px] font-bold text-foreground-2 hover:bg-surface-muted"
       >
         Agregar otro tipo de entrada
@@ -151,7 +163,7 @@ export function EventForm({
 }) {
   const action = mode === "create" ? createEventAction : updateEventAction.bind(null, event!.id);
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, {});
-  const [drafts, setDrafts] = useState<Draft[]>([{ key: 1, name: "General", price: "", quantity: "" }]);
+  const [drafts, setDrafts] = useState<Draft[]>([{ key: 1, name: "General", price: "", quantity: "", startDay: "", endDay: "" }]);
   const [title, setTitle] = useState(event?.title ?? "");
   const [startsAt, setStartsAt] = useState(event ? toVeInput(event.starts_at) : "");
 
@@ -162,6 +174,8 @@ export function EventForm({
           name: d.name,
           priceCents: d.price.trim() === "" ? 0 : Math.round(parseFloat(d.price.replace(",", ".")) * 100),
           quantity: parseInt(d.quantity, 10),
+          startDay: d.startDay,
+          endDay: d.endDay,
         }))
       ),
     [drafts]

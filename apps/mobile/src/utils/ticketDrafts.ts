@@ -1,10 +1,13 @@
 import type { NewTicketInput } from "../context/AppStore";
+import { dayEndIso, dayStartIso } from "../core/ticketSales";
 
 export interface TicketDraft {
   key: string;
   name: string;
   price: string; // USD; vacío o 0 = gratis
   quantity: string;
+  startDay?: string; // YYYY-MM-DD, vacío = abierta ya
+  endDay?: string; // YYYY-MM-DD, vacío = sin cierre
 }
 
 export const TICKET_NAME_PRESETS = ["General", "VIP", "Preventa"];
@@ -21,7 +24,14 @@ export function draftToTicket(d: TicketDraft): NewTicketInput | null {
   const quantity = parseInt(d.quantity, 10);
   if (name.length < 2 || !Number.isFinite(priceCents) || priceCents < 0) return null;
   if (!Number.isInteger(quantity) || quantity < 1) return null;
-  return { name, priceCents, quantity };
+  if (d.startDay && d.endDay && d.endDay < d.startDay) return null;
+  return {
+    name,
+    priceCents,
+    quantity,
+    salesStart: d.startDay ? dayStartIso(d.startDay) : null,
+    salesEnd: d.endDay ? dayEndIso(d.endDay) : null,
+  };
 }
 
 export function validDrafts(drafts: TicketDraft[]): NewTicketInput[] | null {
