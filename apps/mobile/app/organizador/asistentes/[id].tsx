@@ -8,6 +8,8 @@ import { useAppStore, useEvent, type Attendee } from "../../../src/context/AppSt
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
 import { formatUsd } from "../../../src/core/pricing";
 import { normalizeSearch } from "../../../src/utils/format";
+import { PrimaryButton } from "../../../src/components/Button";
+import { Chip } from "../../../src/components/Chip";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -27,12 +29,20 @@ export default function AsistentesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(id);
-  const { fetchAttendees, checkIn, organizerOrders } = useAppStore();
+  const { fetchAttendees, checkIn, organizerOrders, issueComp, sendAnnouncement } = useAppStore();
 
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [busyCode, setBusyCode] = useState<string | null>(null);
+  const [panel, setPanel] = useState<null | "invitar" | "avisar">(null);
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestQty, setGuestQty] = useState(1);
+  const [guestNote, setGuestNote] = useState("");
+  const [typeId, setTypeId] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [working, setWorking] = useState(false);
+  const [feedback, setFeedback] = useState<{ text: string; error: boolean } | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -55,6 +65,38 @@ export default function AsistentesScreen() {
   }, [attendees, query]);
 
   if (!allowed || !event) return null;
+
+  const closed = event.status === "cancelled" || event.status === "finished";
+  const selectedType = event.ticketTypes.find((t) => t.id === typeId) ?? event.ticketTypes[0];
+
+  async function sendComp() {
+    if (!selectedType) return;
+    setWorking(true);
+    setFeedback(null);
+    const result = await issueComp(selectedType.id, guestEmail, guestQty, guestNote);
+    setWorking(false);
+    if (result.ok) {
+      setFeedback({ text: `Listo. ${guestEmail.trim()} ya tiene ${guestQty === 1 ? "su entrada" : "sus entradas"} en la app.`, error: false });
+      setGuestEmail("");
+      setGuestNote("");
+      load();
+    } else {
+      setFeedback({ text: result.reason ?? "No se pudo enviar.", error: true });
+    }
+  }
+
+  async function sendMessage() {
+    setWorking(true);
+    setFeedback(null);
+    const result = await sendAnnouncement(event!.id, announcement);
+    setWorking(false);
+    if (result.ok) {
+      setFeedback({ text: `Mensaje enviado a ${result.recipients} ${result.recipients === 1 ? "persona" : "personas"}.`, error: false });
+      setAnnouncement("");
+    } else {
+      setFeedback({ text: result.reason ?? "No se pudo enviar.", error: true });
+    }
+  }
 
   async function manualCheckIn(attendee: Attendee) {
     setBusyCode(attendee.code);
@@ -80,7 +122,7 @@ export default function AsistentesScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 60 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()}>
           <View style={{ transform: [{ rotate: "180deg" }] }}>
@@ -108,6 +150,64 @@ export default function AsistentesScreen() {
           </View>
         </GlassCard>
       </View>
+
+      {!closed && (
+        <View style={styles.section}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
+            <Chip label="Invitar a alguien" selected={panel === "invitar"} onPress={() => { setPanel(panel === "invitar" ? null : "invitar"); setFeedback(null); }} />
+            <Chip label="Avisar a todos" selected={panel === "avisar"} onPress={() => { setPanel(panel === "avisar" ? null : "avisar"); setFeedback(null); }} />
+          </View>
+
+          {panel === "invitar" && (
+            <GlassCard level="card" style={{ marginTop: 12 }}>
+              <View style={{ padding: 16, gap: 10 }}>
+                <Text style={styles.panelHint}>Regala entradas de cortesía a alguien que ya tiene cuenta en Plann. No pagan, no cuentan como venta y no dan puntos.</Text>
+                <TextInput value={guestEmail} onChangeText={setGuestEmail} placeholder="Correo de tu invitado" placeholderTextColor={color.text4} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} style={styles.search} />
+                {event.ticketTypes.length > 1 && (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {event.ticketTypes.map((t) => (
+                      <Chip key={t.id} label={t.name} selected={selectedType?.id === t.id} onPress={() => setTypeId(t.id)} />
+                    ))}
+                  </View>
+                )}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                  <Text style={styles.panelLabel}>Entradas</Text>
+                  <Pressable style={styles.stepBtn} onPress={() => setGuestQty((q) => Math.max(1, q - 1))}>
+                    <Text style={styles.stepText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.stepValue}>{guestQty}</Text>
+                  <Pressable style={styles.stepBtn} onPress={() => setGuestQty((q) => Math.min(6, q + 1))}>
+                    <Text style={styles.stepText}>+</Text>
+                  </Pressable>
+                </View>
+                <TextInput value={guestNote} onChangeText={setGuestNote} placeholder="Nota interna (opcional), ej. Prensa" placeholderTextColor={color.text4} style={styles.search} />
+                {feedback && <Text style={[styles.feedback, feedback.error && { color: color.pink }]}>{feedback.text}</Text>}
+                <PrimaryButton label="Enviar cortesía" disabled={!/^\S+@\S+\.\S+$/.test(guestEmail.trim())} loading={working} onPress={sendComp} />
+              </View>
+            </GlassCard>
+          )}
+
+          {panel === "avisar" && (
+            <GlassCard level="card" style={{ marginTop: 12 }}>
+              <View style={{ padding: 16, gap: 10 }}>
+                <Text style={styles.panelHint}>Le llega una notificación a cada persona con entrada. Máximo 3 mensajes por evento al día.</Text>
+                <TextInput
+                  value={announcement}
+                  onChangeText={setAnnouncement}
+                  placeholder="Ej. Cambiamos el punto de encuentro a la puerta norte"
+                  placeholderTextColor={color.text4}
+                  multiline
+                  maxLength={500}
+                  style={[styles.search, { height: 100, paddingTop: 14, textAlignVertical: "top" }]}
+                />
+                <Text style={styles.panelHint}>{announcement.length}/500</Text>
+                {feedback && <Text style={[styles.feedback, feedback.error && { color: color.pink }]}>{feedback.text}</Text>}
+                <PrimaryButton label={`Enviar a ${active.length} ${active.length === 1 ? "persona" : "personas"}`} disabled={announcement.trim().length < 5 || active.length === 0} loading={working} onPress={sendMessage} />
+              </View>
+            </GlassCard>
+          )}
+        </View>
+      )}
 
       <View style={styles.section}>
         <TextInput
@@ -184,6 +284,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: color.text,
   },
+  panelHint: { fontFamily: fontFamily.regular, fontSize: 12.5, lineHeight: 18, color: color.text3 },
+  panelLabel: { fontFamily: fontFamily.bold, fontSize: 13, color: color.text2 },
+  stepBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  stepText: { fontFamily: fontFamily.bold, fontSize: 18, color: color.text },
+  stepValue: { fontFamily: fontFamily.extraBold, fontSize: 16, color: color.text, minWidth: 18, textAlign: "center" },
+  feedback: { fontFamily: fontFamily.semiBold, fontSize: 13, color: color.text2 },
   emptyText: { fontFamily: fontFamily.regular, fontSize: 13, color: color.text3 },
   attendeeRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 10 },
   attendeeName: { fontFamily: fontFamily.bold, fontSize: 14.5, color: color.text },

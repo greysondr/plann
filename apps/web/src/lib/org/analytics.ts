@@ -14,6 +14,8 @@ export interface OrderRow {
   commission_cents: number;
   organizer_net_cents: number;
   currency_paid: string | null;
+  discount_cents?: number;
+  is_comp?: boolean;
   created_at: string;
   paid_at: string | null;
 }
@@ -35,7 +37,8 @@ export function dayKey(iso: string | number | Date): string {
 }
 
 const saleDate = (o: OrderRow) => o.paid_at ?? o.created_at;
-export const isPaid = (o: OrderRow) => o.status === "paid";
+// Una cortesía ocupa cupo y emite tickets, pero no es una venta.
+export const isPaid = (o: OrderRow) => o.status === "paid" && !o.is_comp;
 
 export interface DayPoint {
   date: string;
@@ -126,7 +129,8 @@ export interface Funnel {
   conversion: number;
 }
 
-export function funnel(orders: OrderRow[]): Funnel {
+export function funnel(allOrders: OrderRow[]): Funnel {
+  const orders = allOrders.filter((o) => !o.is_comp);
   const f: Funnel = { total: orders.length, paid: 0, pending: 0, expired: 0, cancelled: 0, refunded: 0, conversion: 0 };
   for (const o of orders) {
     if (o.status === "paid") f.paid += 1;

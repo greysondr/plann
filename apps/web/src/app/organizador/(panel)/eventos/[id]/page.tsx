@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrganizer } from "@/lib/org/session";
-import { loadAttendees, loadEvents, loadOrders, loadTickets } from "@/lib/org/data";
+import { loadAnnouncements, loadAttendees, loadEvents, loadOrders, loadTickets } from "@/lib/org/data";
 import { attendance, checkinsByHour, cumulativeTickets, funnel, sumBy } from "@/lib/org/analytics";
 import { longDateTime, pct, shortDate, usd } from "@/lib/format";
 import { Button, Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, Th, Tr } from "@/components/ui";
 import { AreaTrend, ColumnChart, Donut } from "@/components/org/charts";
 import { EventStatusBadge, OrderStatusBadge, ProgressBar } from "@/components/org/bits";
 import { AttendeesTable } from "@/components/org/Tables";
+import { AnnouncementForm, CompForm } from "@/components/org/EventEngage";
 import { duplicateEventAction, setSalesPausedAction } from "../../actions";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
 
-  const [orders, tickets, attendees] = await Promise.all([loadOrders([id]), loadTickets([id]), loadAttendees(id)]);
+  const [orders, tickets, attendees, announcements] = await Promise.all([loadOrders([id]), loadTickets([id]), loadAttendees(id), loadAnnouncements(id)]);
 
   const sold = event.ticket_types.reduce((s, t) => s + t.sold, 0);
   const capacity = event.ticket_types.reduce((s, t) => s + t.quantity, 0);
@@ -130,6 +131,35 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         <CardHeader title="Asistentes" subtitle="Quiénes compraron y quién ya entró" />
         <AttendeesTable eventId={event.id} eventTitle={event.title} attendees={attendees} />
       </Card>
+
+      {!closed && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Card>
+            <CardHeader title="Invitar a alguien" subtitle="Entradas de cortesía" />
+            <div className="p-5">
+              <CompForm eventId={event.id} types={event.ticket_types.map((t) => ({ id: t.id, name: t.name }))} />
+            </div>
+          </Card>
+          <Card>
+            <CardHeader title="Avisar a los asistentes" subtitle="Cambios de hora, lugar u otra novedad" />
+            <div className="space-y-4 p-5">
+              <AnnouncementForm eventId={event.id} recipients={attendees.filter((a) => a.status === "valid" || a.status === "used").length} />
+              {announcements.length > 0 && (
+                <ul className="divide-y divide-border border-t border-border pt-2 text-[12.5px]">
+                  {announcements.map((a) => (
+                    <li key={a.id} className="py-2">
+                      <p className="text-foreground-2">{a.message}</p>
+                      <p className="text-foreground-3">
+                        {shortDate(a.created_at)} · {a.recipients} {a.recipients === 1 ? "persona" : "personas"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
 
       <Card>
         <CardHeader title="Pedidos del evento" />

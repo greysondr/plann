@@ -65,6 +65,12 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
   sales_paused: "El organizador pausó las ventas de este evento.",
+  coupon_invalid: "Ese código no existe o no aplica a este evento.",
+  coupon_expired: "Ese cupón ya venció o todavía no está activo.",
+  coupon_exhausted: "Ese cupón ya se agotó.",
+  coupon_used: "Ya usaste este cupón.",
+  message_length: "El mensaje debe tener entre 5 y 500 caracteres.",
+  announcement_limit: "Ya enviaste 3 mensajes a este evento hoy. Intenta mañana.",
 };
 
 function dbErrorMessage(message: string | undefined, fallback: string): string {
@@ -148,6 +154,28 @@ export interface AppNotification {
   createdAt: string;
 }
 
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: "percent" | "fixed";
+  discountValue: number;
+  eventId: string | null;
+  maxUses: number | null;
+  perUserLimit: number;
+  validUntil?: string;
+  active: boolean;
+  uses: number;
+}
+
+export interface NewCouponInput {
+  code: string;
+  discountType: "percent" | "fixed";
+  discountValue: number; // % (1-100) o centavos
+  eventId: string | null;
+  maxUses: number | null;
+  validUntil?: string;
+}
+
 export interface StaffMember {
   id: string;
   email: string;
@@ -210,6 +238,12 @@ interface AppStoreValue {
   markNotificationsRead: (ids?: string[]) => Promise<void>;
   staff: StaffMember[];
   staffAssignments: StaffAssignment[];
+  coupons: Coupon[];
+  createCoupon: (input: NewCouponInput) => Promise<Result>;
+  setCouponActive: (id: string, active: boolean) => Promise<Result>;
+  deleteCoupon: (id: string) => Promise<Result>;
+  issueComp: (ticketTypeId: string, email: string, quantity: number, note?: string) => Promise<Result>;
+  sendAnnouncement: (eventId: string, message: string) => Promise<Result & { recipients?: number }>;
 
   rateApplied: number;
   points: number;
@@ -219,7 +253,8 @@ interface AppStoreValue {
   signIn: (email: string, password: string) => Promise<{ ok: boolean; reason?: string }>;
   signOut: () => Promise<void>;
 
-  createOrder: (ticketTypeId: string, quantity: number) => Promise<CreateOrderResult>;
+  createOrder: (ticketTypeId: string, quantity: number, couponCode?: string) => Promise<CreateOrderResult>;
+  previewCoupon: (ticketTypeId: string, quantity: number, code: string) => Promise<{ valid: boolean; discountCents: number; reason?: string }>;
   submitPaymentReference: (orderId: string, method: PaymentMethod, reference: string, bank?: string) => Promise<{ ok: boolean; reason?: string }>;
   checkIn: (code: string, eventId?: string) => Promise<{ status: "valid" | "used" | "invalid"; attendeeName?: string; checkedInAt?: string }>;
   toggleFavorite: (eventId: string) => Promise<void>;
@@ -271,6 +306,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [analyticsOrders, setAnalyticsOrders] = useState<OrderRow[]>([]);
   const [analyticsTickets, setAnalyticsTickets] = useState<TicketRow[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
@@ -512,7 +548,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     const [orderRows, ticketRows] = await Promise.all([
       pageAll(
         "orders",
-        "id, user_id, event_id, ticket_type_id, quantity, status, subtotal_cents, total_usd_cents, commission_cents, organizer_net_cents, currency_paid, created_at, paid_at"
+        "id, user_id, event_id, ticket_type_id, quantity, status, subtotal_cents, total_usd_cents, commission_cents, organizer_net_cents, currency_paid, discount_cents, is_comp, created_at, paid_at"
       ),
       pageAll("tickets", "id, event_id, ticket_type_id, status, checked_in_at, created_at"),
     ]);
@@ -537,6 +573,38 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         data: r.data ?? {},
         readAt: r.read_at ?? undefined,
         createdAt: r.created_at,
+      }))
+    );
+  }, []);
+
+  // --- Cupones del organizador, con cuántas veces se usó cada uno ---------------
+  const fetchCoupons = useCallback(async (organizerId: string | null) => {
+    if (!organizerId) {
+      setCoupons([]);
+      return;
+    }
+    const [{ data: rows }, { data: reds }] = await Promise.all([
+      supabase.from("coupons").select("*").eq("organizer_id", organizerId).order("created_at", { ascending: false }),
+      supabase.from("coupon_redemptions").select("coupon_id, orders(status)"),
+    ]);
+    const uses = new Map<string, number>();
+    for (const r of reds ?? []) {
+      const status = (r as any).orders?.status;
+      if (status === "expired" || status === "cancelled") continue;
+      uses.set((r as any).coupon_id, (uses.get((r as any).coupon_id) ?? 0) + 1);
+    }
+    setCoupons(
+      (rows ?? []).map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        discountType: c.discount_type,
+        discountValue: c.discount_value,
+        eventId: c.event_id,
+        maxUses: c.max_uses,
+        perUserLimit: c.per_user_limit,
+        validUntil: c.valid_until ?? undefined,
+        active: c.active,
+        uses: uses.get(c.id) ?? 0,
       }))
     );
   }, []);
@@ -638,6 +706,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setOrganizerProfile(null);
         setMyOrganizerId(null);
         setOrganizerOrders([]);
+        setCoupons([]);
         setNotifications([]);
         setAnalyticsOrders([]);
         setAnalyticsTickets([]);
@@ -727,6 +796,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (userId) fetchStaff(userId, myOrganizerId);
   }, [userId, myOrganizerId, fetchStaff]);
 
+  useEffect(() => {
+    fetchCoupons(myOrganizerId);
+  }, [myOrganizerId, organizerOrders, fetchCoupons]);
+
   // Notificaciones: carga inicial, token de push y aviso en vivo cuando llega una nueva.
   useEffect(() => {
     if (!userId) return;
@@ -807,11 +880,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // --- Compra: crear orden (reserva atómica en el servidor) -------------------
   const createOrder = useCallback(
-    async (ticketTypeId: string, quantity: number): Promise<CreateOrderResult> => {
+    async (ticketTypeId: string, quantity: number, couponCode?: string): Promise<CreateOrderResult> => {
       const { data, error } = await supabase.rpc("create_order", {
         p_ticket_type_id: ticketTypeId,
         p_quantity: quantity,
         p_idempotency_key: uuidv4(),
+        p_coupon_code: couponCode?.trim() || null,
       });
       if (error || !data) {
         const reason = error?.message.includes("sold_out")
@@ -843,6 +917,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     },
     [userId, fetchUserData]
   );
+
+  const previewCoupon = useCallback(async (ticketTypeId: string, quantity: number, code: string) => {
+    const { data, error } = await supabase.rpc("preview_coupon", { p_ticket_type_id: ticketTypeId, p_quantity: quantity, p_code: code.trim() });
+    if (error || !data) return { valid: false, discountCents: 0, reason: "No pudimos revisar el cupón. Intenta de nuevo." };
+    const r: any = data;
+    if (!r.valid) return { valid: false, discountCents: 0, reason: dbErrorMessage(r.reason, "Ese cupón no es válido.") };
+    return { valid: true, discountCents: Number(r.discount_cents) };
+  }, []);
 
   const submitPaymentReference = useCallback(
     async (orderId: string, method: PaymentMethod, reference: string, bank?: string) => {
@@ -1059,6 +1141,69 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     },
     [myOrganizerId, fetchEvents]
   );
+
+  const createCoupon = useCallback(
+    async (input: NewCouponInput): Promise<Result> => {
+      if (!myOrganizerId) return { ok: false };
+      const { error } = await supabase.from("coupons").insert({
+        organizer_id: myOrganizerId,
+        event_id: input.eventId,
+        code: input.code.trim().toUpperCase(),
+        discount_type: input.discountType,
+        discount_value: input.discountValue,
+        max_uses: input.maxUses,
+        valid_until: input.validUntil ?? null,
+      });
+      if (error) {
+        const dup = error.code === "23505" || error.message.includes("uq_coupons_code");
+        return { ok: false, reason: dup ? "Ya tienes un cupón con ese código." : "No se pudo crear el cupón." };
+      }
+      await fetchCoupons(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchCoupons]
+  );
+
+  const setCouponActive = useCallback(
+    async (id: string, active: boolean): Promise<Result> => {
+      const { error } = await supabase.from("coupons").update({ active }).eq("id", id);
+      if (error) return { ok: false, reason: "No se pudo cambiar el cupón." };
+      await fetchCoupons(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchCoupons]
+  );
+
+  const deleteCoupon = useCallback(
+    async (id: string): Promise<Result> => {
+      const { error } = await supabase.from("coupons").delete().eq("id", id);
+      if (error) return { ok: false, reason: "No se pudo eliminar el cupón." };
+      await fetchCoupons(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchCoupons]
+  );
+
+  const issueComp = useCallback(
+    async (ticketTypeId: string, email: string, quantity: number, note?: string): Promise<Result> => {
+      const { error } = await supabase.rpc("issue_comp_tickets", {
+        p_ticket_type_id: ticketTypeId,
+        p_email: email.trim(),
+        p_quantity: quantity,
+        p_note: note?.trim() || null,
+      });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo enviar la cortesía.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const sendAnnouncement = useCallback(async (eventId: string, message: string) => {
+    const { data, error } = await supabase.rpc("send_event_announcement", { p_event_id: eventId, p_message: message });
+    if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo enviar el mensaje.") };
+    return { ok: true, recipients: Number(data ?? 0) };
+  }, []);
 
   const markNotificationsRead = useCallback(
     async (ids?: string[]) => {
@@ -1284,6 +1429,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead,
       staff,
       staffAssignments,
+      coupons,
+      createCoupon,
+      setCouponActive,
+      deleteCoupon,
+      issueComp,
+      sendAnnouncement,
       rateApplied,
       points,
       tier,
@@ -1291,6 +1442,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       createOrder,
+      previewCoupon,
       submitPaymentReference,
       checkIn,
       toggleFavorite,
@@ -1338,6 +1490,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       markNotificationsRead,
       staff,
       staffAssignments,
+      coupons,
+      createCoupon,
+      setCouponActive,
+      deleteCoupon,
+      issueComp,
+      sendAnnouncement,
       rateApplied,
       points,
       tier,
@@ -1345,6 +1503,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       createOrder,
+      previewCoupon,
       submitPaymentReference,
       checkIn,
       toggleFavorite,

@@ -28,7 +28,7 @@ const Divider = () => <View style={styles.divider} />;
 export default function MasScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount } = useAppStore();
+  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount, coupons } = useAppStore();
   if (!allowed) return null;
 
   const active = events.filter((e) => e.organizerId === myOrganizerId && ["published", "sold_out", "live"].includes(e.status ?? "")).length;
@@ -62,6 +62,8 @@ export default function MasScreen() {
             <Row label="Mis eventos" hint={`${active} activos`} onPress={() => router.push("/organizador/eventos")} />
             <Divider />
             <Row label="Ventas y pedidos" hint="Filtra y consulta cada pedido" onPress={() => router.push("/organizador/ventas")} />
+            <Divider />
+            <Row label="Cupones" hint={coupons.length === 0 ? "Descuentos para tus compradores" : `${coupons.filter((c) => c.active).length} activos`} onPress={() => router.push("/organizador/cupones")} />
             <Divider />
             <Row label="Mi negocio" hint={organizerProfile?.name ?? "Perfil, logo y cuenta de cobro"} onPress={() => router.push("/organizador/negocio")} />
           </GlassCard>

@@ -17,6 +17,9 @@ const DB_ERRORS: Record<string, string> = {
   user_not_found: "No hay ninguna cuenta de Plann con ese correo. Pídele que se registre primero.",
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   not_authorized: "No tienes permiso para hacer esto.",
+  sold_out: "No quedan entradas suficientes de ese tipo.",
+  message_length: "El mensaje debe tener entre 5 y 500 caracteres.",
+  announcement_limit: "Ya enviaste 3 mensajes a este evento hoy. Intenta mañana.",
 };
 
 function dbError(message: string | undefined, fallback: string): string {
@@ -354,4 +357,73 @@ export async function updateProfileAction(_prev: FormState, formData: FormData):
   if (error) return { error: dbError(error.message, "No pudimos guardar tu perfil.") };
   revalidatePath("/organizador", "layout");
   return { ok: "Perfil actualizado." };
+}
+
+export async function createCouponAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { organizer } = await requireOrganizer();
+  const code = String(formData.get("code") ?? "").trim().toUpperCase();
+  const type = String(formData.get("type") ?? "percent");
+  const raw = Number(String(formData.get("value") ?? "").replace(",", "."));
+  const eventId = String(formData.get("event_id") ?? "") || null;
+  const maxRaw = String(formData.get("max_uses") ?? "").trim();
+  const maxUses = maxRaw === "" ? null : Math.round(Number(maxRaw));
+  if (!/^[A-Z0-9_-]{3,20}$/.test(code)) return { error: "El código debe tener entre 3 y 20 letras o números, sin espacios." };
+  if (type !== "percent" && type !== "fixed") return { error: "Elige el tipo de descuento." };
+  const value = type === "percent" ? Math.round(raw) : Math.round(raw * 100);
+  if (!Number.isFinite(raw) || raw <= 0 || (type === "percent" && value > 100)) return { error: "El descuento no es válido." };
+  if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1)) return { error: "Los usos máximos deben ser al menos 1." };
+
+  const supabase = await supabaseServer();
+  const { error } = await supabase.from("coupons").insert({
+    organizer_id: organizer.id,
+    event_id: eventId,
+    code,
+    discount_type: type,
+    discount_value: value,
+    max_uses: maxUses,
+  });
+  if (error) return { error: error.code === "23505" ? "Ya tienes un cupón con ese código." : "No pudimos crear el cupón." };
+  revalidatePath("/organizador/cupones");
+  return { ok: "Cupón creado." };
+}
+
+export async function toggleCouponAction(id: string, active: boolean): Promise<void> {
+  await requireOrganizer();
+  const supabase = await supabaseServer();
+  await supabase.from("coupons").update({ active }).eq("id", id);
+  revalidatePath("/organizador/cupones");
+}
+
+export async function deleteCouponAction(id: string): Promise<void> {
+  await requireOrganizer();
+  const supabase = await supabaseServer();
+  await supabase.from("coupons").delete().eq("id", id);
+  revalidatePath("/organizador/cupones");
+}
+
+export async function issueCompAction(eventId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const email = String(formData.get("email") ?? "").trim();
+  const ticketTypeId = String(formData.get("ticket_type_id") ?? "");
+  const quantity = Math.round(Number(formData.get("quantity")));
+  const note = String(formData.get("note") ?? "").trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Escribe un correo válido." };
+  if (!ticketTypeId) return { error: "Elige el tipo de entrada." };
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 6) return { error: "Puedes regalar de 1 a 6 entradas." };
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("issue_comp_tickets", { p_ticket_type_id: ticketTypeId, p_email: email, p_quantity: quantity, p_note: note || null });
+  if (error) return { error: dbError(error.message, "No pudimos enviar la cortesía.") };
+  revalidatePath(`/organizador/eventos/${eventId}`);
+  return { ok: `Listo. ${email} ya tiene ${quantity === 1 ? "su entrada" : "sus entradas"} en la app.` };
+}
+
+export async function sendAnnouncementAction(eventId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const message = String(formData.get("message") ?? "").trim();
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc("send_event_announcement", { p_event_id: eventId, p_message: message });
+  if (error) return { error: dbError(error.message, "No pudimos enviar el mensaje.") };
+  revalidatePath(`/organizador/eventos/${eventId}`);
+  const n = Number(data ?? 0);
+  return { ok: `Mensaje enviado a ${n} ${n === 1 ? "persona" : "personas"}.` };
 }

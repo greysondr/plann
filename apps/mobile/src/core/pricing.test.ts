@@ -36,3 +36,17 @@ test("el fee es un solo mínimo por orden, no por ticket (coincide con create_or
   assert.equal(totals.subtotalCents, 4000);
   assert.equal(totals.serviceFeeCents, 120); // 3% de $40 = $1.20 > $0.50
 });
+
+test("un cupón rebaja el subtotal y el fee y la comisión se calculan sobre lo rebajado", () => {
+  const totals = calculateOrderTotals({ unitPriceCents: 1000, quantity: 1, commissionRate: 0.12, rateUsed: 40, discountCents: 500 });
+  assert.equal(totals.subtotalCents, 500);
+  assert.equal(totals.serviceFeeCents, 50);
+  assert.equal(totals.totalCents, 550);
+  assert.equal(totals.commissionCents, 60);
+  assert.equal(totals.organizerNetCents, 440);
+});
+
+test("un cupón del 100% deja la orden gratis, sin fee", () => {
+  const totals = calculateOrderTotals({ unitPriceCents: 1000, quantity: 2, commissionRate: 0.12, rateUsed: 40, discountCents: 2000 });
+  assert.deepEqual(totals, { subtotalCents: 0, serviceFeeCents: 0, totalCents: 0, commissionCents: 0, organizerNetCents: 0, totalBs: 0 });
+});

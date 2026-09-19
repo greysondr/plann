@@ -79,7 +79,7 @@ export async function loadOrders(eventIds: string[]): Promise<OrderRow[]> {
     supabase
       .from("orders")
       .select(
-        "id, user_id, event_id, ticket_type_id, quantity, status, subtotal_cents, total_usd_cents, commission_cents, organizer_net_cents, currency_paid, created_at, paid_at"
+        "id, user_id, event_id, ticket_type_id, quantity, status, subtotal_cents, total_usd_cents, commission_cents, organizer_net_cents, currency_paid, discount_cents, is_comp, created_at, paid_at"
       )
       .in("event_id", eventIds)
       .order("created_at", { ascending: false })
@@ -168,4 +168,44 @@ export async function loadCatalog(): Promise<{ categories: { id: string; name: s
     supabase.from("cities").select("id, name").order("name"),
   ]);
   return { categories: categories ?? [], cities: cities ?? [] };
+}
+
+export interface CouponRow {
+  id: string;
+  code: string;
+  discount_type: "percent" | "fixed";
+  discount_value: number;
+  event_id: string | null;
+  max_uses: number | null;
+  per_user_limit: number;
+  valid_until: string | null;
+  active: boolean;
+  uses: number;
+}
+
+export async function loadCoupons(organizerId: string): Promise<CouponRow[]> {
+  const supabase = await supabaseServer();
+  const [{ data: rows }, { data: reds }] = await Promise.all([
+    supabase.from("coupons").select("*").eq("organizer_id", organizerId).order("created_at", { ascending: false }),
+    supabase.from("coupon_redemptions").select("coupon_id, orders(status)"),
+  ]);
+  const uses = new Map<string, number>();
+  for (const r of (reds ?? []) as unknown as { coupon_id: string; orders: { status: string } | null }[]) {
+    if (r.orders?.status === "expired" || r.orders?.status === "cancelled") continue;
+    uses.set(r.coupon_id, (uses.get(r.coupon_id) ?? 0) + 1);
+  }
+  return ((rows ?? []) as Omit<CouponRow, "uses">[]).map((c) => ({ ...c, uses: uses.get(c.id) ?? 0 }));
+}
+
+export interface AnnouncementRow {
+  id: string;
+  message: string;
+  recipients: number;
+  created_at: string;
+}
+
+export async function loadAnnouncements(eventId: string): Promise<AnnouncementRow[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.from("announcements").select("id, message, recipients, created_at").eq("event_id", eventId).order("created_at", { ascending: false }).limit(5);
+  return (data ?? []) as AnnouncementRow[];
 }

@@ -43,14 +43,17 @@ export function calculateOrderTotals(params: {
   quantity: number;
   commissionRate: number;
   rateUsed: number; // tasa Plann ya calculada, congelada para la orden
+  discountCents?: number; // cupón: lo absorbe el organizador; fee y comisión van sobre lo rebajado
 }): OrderTotals {
   const { unitPriceCents, quantity, commissionRate, rateUsed } = params;
 
-  if (unitPriceCents <= 0) {
+  const gross = unitPriceCents * quantity;
+  const discount = Math.min(Math.max(params.discountCents ?? 0, 0), gross);
+  if (unitPriceCents <= 0 || gross - discount <= 0) {
     return { subtotalCents: 0, serviceFeeCents: 0, totalCents: 0, commissionCents: 0, organizerNetCents: 0, totalBs: 0 };
   }
 
-  const subtotalCents = unitPriceCents * quantity;
+  const subtotalCents = gross - discount;
   const serviceFeeCents = serviceFeeForSubtotalCents(subtotalCents);
   const totalCents = subtotalCents + serviceFeeCents;
   const commissionCents = Math.round(subtotalCents * commissionRate);

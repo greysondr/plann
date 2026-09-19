@@ -122,6 +122,7 @@ export default function RootLayout() {
                 <Stack.Screen name="organizador/crear" />
                 <Stack.Screen name="organizador/escanear" />
                 <Stack.Screen name="organizador/retiros" />
+                <Stack.Screen name="organizador/cupones" />
                 <Stack.Screen name="organizador/negocio" />
                 <Stack.Screen name="organizador/analiticas/[id]" />
                 <Stack.Screen name="organizador/equipo" />

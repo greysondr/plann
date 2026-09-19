@@ -101,3 +101,12 @@ test("checkinsByHour no estira el eje cuando la fiesta cruza la medianoche", () 
   assert.deepEqual(rows.map((r) => r.label), ["10 pm", "11 pm", "12 am"]);
   assert.deepEqual(rows.map((r) => r.count), [1, 1, 1]);
 });
+
+test("las cortesías no cuentan como ventas ni en la conversión", () => {
+  const comp = order({ id: "c", is_comp: true, subtotal_cents: 0, organizer_net_cents: 0 });
+  const t = totalsBetween([order({}), comp], new Date("2026-09-01T00:00:00Z"), new Date("2026-09-30T00:00:00Z"));
+  assert.equal(t.orders, 1);
+  assert.equal(t.tickets, 1);
+  assert.equal(funnel([order({}), comp]).total, 1);
+  assert.equal(buyerStats([comp]).buyers, 0);
+});

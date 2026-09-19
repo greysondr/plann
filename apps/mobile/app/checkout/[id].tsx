@@ -44,7 +44,7 @@ export default function CheckoutScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(params.id);
-  const { orders, tickets, rateApplied, createOrder, submitPaymentReference } = useAppStore();
+  const { orders, tickets, rateApplied, createOrder, previewCoupon, submitPaymentReference } = useAppStore();
 
   const [orderId, setOrderId] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
@@ -53,6 +53,10 @@ export default function CheckoutScreen() {
   const [bank, setBank] = useState("");
   const [busy, setBusy] = useState(false);
   const [accounts, setAccounts] = useState<ReceivingAccount[]>([]);
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; discountCents: number } | null>(null);
+  const [couponMessage, setCouponMessage] = useState<string | null>(null);
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
 
   const quantity = Number(params.quantity ?? 1);
   const ticketType = event?.ticketTypes.find((t) => t.id === params.ticketTypeId);
@@ -75,8 +79,10 @@ export default function CheckoutScreen() {
       quantity,
       commissionRate: 0, // no afecta el total del comprador, solo el reparto del organizador
       rateUsed: rateApplied,
+      discountCents: coupon?.discountCents ?? 0,
     });
-  }, [ticketType, quantity, rateApplied]);
+  }, [ticketType, quantity, rateApplied, coupon]);
+  const isFree = !!totals && totals.totalCents === 0;
 
   const myTickets = order ? tickets.filter((t) => t.orderId === order.id) : [];
 
@@ -93,7 +99,7 @@ export default function CheckoutScreen() {
 
   async function handleChooseMethod(method: PaymentMethod) {
     setBusy(true);
-    const result = await createOrder(ticketType!.id, quantity);
+    const result = await createOrder(ticketType!.id, quantity, coupon?.code);
     setBusy(false);
     if (!result.ok || !result.order) {
       Alert.alert("No se pudo reservar", result.reason ?? "Intenta de nuevo.");
@@ -102,6 +108,28 @@ export default function CheckoutScreen() {
     }
     setSelectedMethod(method);
     setOrderId(result.order.id);
+  }
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code || !ticketType) return;
+    setCheckingCoupon(true);
+    setCouponMessage(null);
+    const result = await previewCoupon(ticketType.id, quantity, code);
+    setCheckingCoupon(false);
+    if (result.valid) {
+      setCoupon({ code, discountCents: result.discountCents });
+      setCouponMessage(null);
+    } else {
+      setCoupon(null);
+      setCouponMessage(result.reason ?? "Ese cupón no es válido.");
+    }
+  }
+
+  function removeCoupon() {
+    setCoupon(null);
+    setCouponInput("");
+    setCouponMessage(null);
   }
 
   async function copy(value: string) {
@@ -136,21 +164,52 @@ export default function CheckoutScreen() {
                   <Text style={styles.eventTitle} numberOfLines={2}>
                     {event.title}
                   </Text>
-                  <Row label={`${ticketType.name} x${quantity}`} value={formatUsd(totals.subtotalCents)} />
+                  <Row label={`${ticketType.name} x${quantity}`} value={formatUsd(ticketType.priceCents * quantity)} />
+                  {coupon && <Row label={`Cupón ${coupon.code.toUpperCase()}`} value={`−${formatUsd(coupon.discountCents)}`} />}
                   {totals.serviceFeeCents > 0 && <Row label="Fee de servicio" value={formatUsd(totals.serviceFeeCents)} />}
                   <View style={styles.divider} />
-                  <Row label="Total" value={ticketType.priceCents === 0 ? "Gratis" : formatUsd(totals.totalCents)} bold />
-                  {ticketType.priceCents > 0 && (
-                    <Text style={styles.bsHint}>≈ {formatBs(totals.totalBs)} · tasa Plann de hoy</Text>
-                  )}
+                  <Row label="Total" value={isFree ? "Gratis" : formatUsd(totals.totalCents)} bold />
+                  {!isFree && <Text style={styles.bsHint}>≈ {formatBs(totals.totalBs)} · tasa Plann de hoy</Text>}
                 </View>
               </GlassCard>
+
+              {ticketType.priceCents > 0 && (
+                <View style={{ marginTop: 16 }}>
+                  {coupon ? (
+                    <View style={styles.couponApplied}>
+                      <Text style={styles.couponAppliedText}>Cupón aplicado: {coupon.code.toUpperCase()}</Text>
+                      <Pressable onPress={removeCoupon} hitSlop={8}>
+                        <Text style={styles.couponRemove}>Quitar</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.couponRow}>
+                      <TextInput
+                        value={couponInput}
+                        onChangeText={(v) => {
+                          setCouponInput(v);
+                          setCouponMessage(null);
+                        }}
+                        placeholder="¿Tienes un cupón?"
+                        placeholderTextColor={color.text4}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        style={[styles.input, { flex: 1 }]}
+                      />
+                      <Pressable style={[styles.couponButton, !couponInput.trim() && { opacity: 0.4 }]} disabled={!couponInput.trim() || checkingCoupon} onPress={applyCoupon}>
+                        <Text style={styles.couponButtonText}>{checkingCoupon ? "..." : "Aplicar"}</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                  {couponMessage && <Text style={styles.couponError}>{couponMessage}</Text>}
+                </View>
+              )}
               <PrimaryButton
-                label={ticketType.priceCents === 0 ? "Confirmar" : "Continuar"}
+                label={isFree ? "Confirmar" : "Continuar"}
                 loading={busy}
                 style={{ marginTop: 20 }}
                 onPress={() => {
-                  if (ticketType.priceCents === 0) {
+                  if (isFree) {
                     handleChooseMethod("pago_movil");
                   } else {
                     setUiStep("metodo");
@@ -346,6 +405,13 @@ const styles = StyleSheet.create({
   fieldValue: { fontFamily: fontFamily.bold, fontSize: 15, color: color.text, marginTop: 2 },
   copyBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8 },
   copyText: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.text2 },
+  couponRow: { flexDirection: "row", gap: 10 },
+  couponButton: { paddingHorizontal: 18, height: 50, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  couponButtonText: { fontFamily: fontFamily.bold, fontSize: 14, color: color.text },
+  couponApplied: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14, borderRadius: radius.cardLarge, backgroundColor: "rgba(233,65,127,0.10)", borderWidth: 1, borderColor: "rgba(233,65,127,0.30)" },
+  couponAppliedText: { fontFamily: fontFamily.bold, fontSize: 13.5, color: color.text },
+  couponRemove: { fontFamily: fontFamily.bold, fontSize: 13, color: color.pink },
+  couponError: { fontFamily: fontFamily.semiBold, fontSize: 12.5, color: color.pink, marginTop: 8 },
   input: {
     height: 50,
     borderRadius: radius.field,
