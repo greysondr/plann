@@ -17,6 +17,8 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   rejected: "Rechazada",
   expired: "Expirada",
   cancelled: "Cancelada",
+  refund_pending: "Reembolso en proceso",
+  refunded: "Reembolsada",
 };
 
 export default function HistorialScreen() {
@@ -77,7 +79,7 @@ export default function HistorialScreen() {
 
 function statusColor(status: OrderStatus) {
   if (status === "paid") return { color: color.pink };
-  if (status === "rejected" || status === "expired" || status === "cancelled") return { color: color.text4 };
+  if (status === "rejected" || status === "expired" || status === "cancelled" || status === "refunded") return { color: color.text4 };
   return { color: color.text3 };
 }
 

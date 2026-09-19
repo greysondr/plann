@@ -53,6 +53,9 @@ export interface EventItem {
   ticketTypes: TicketType[];
   isFeatured?: boolean;
   isFree?: boolean;
+  status?: "draft" | "in_review" | "published" | "sold_out" | "live" | "finished" | "cancelled";
+  salesPaused?: boolean;
+  cancelReason?: string;
   sourceCurated?: boolean; // "Cartelera": informativo, todavía no se vende en Plann
 }
 
@@ -66,7 +69,9 @@ export type OrderStatus =
   | "paid"
   | "rejected"
   | "expired"
-  | "cancelled";
+  | "cancelled"
+  | "refund_pending"
+  | "refunded";
 
 export interface Order {
   id: string;
@@ -118,4 +123,4 @@ export interface LoyaltyEntry {
   createdAt: string;
 }
 
-export type OrganizerStatus = "none" | "pending" | "verified";
+export type OrganizerStatus = "none" | "pending" | "verified" | "rejected" | "suspended";

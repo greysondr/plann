@@ -18,9 +18,9 @@ const STEPS = [
 export default function ActivarOrganizadorScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { organizerStatus, requestOrganizerVerification } = useAppStore();
-  const [name, setName] = useState("");
-  const [document, setDocument] = useState("");
+  const { organizerStatus, organizerProfile, requestOrganizerVerification } = useAppStore();
+  const [name, setName] = useState(organizerProfile?.name ?? "");
+  const [document, setDocument] = useState(organizerProfile?.document ?? "");
 
   useEffect(() => {
     if (organizerStatus === "verified") {
@@ -50,8 +50,27 @@ export default function ActivarOrganizadorScreen() {
             Normalmente toma menos de 24 h. Te avisamos por correo apenas quede lista.
           </Text>
         </View>
+      ) : organizerStatus === "suspended" ? (
+        <View style={styles.pendingBox}>
+          <Text style={styles.pendingTitle}>Tu cuenta de organizador está suspendida</Text>
+          <Text style={styles.pendingSubtitle}>
+            No puedes publicar eventos ni retirar saldo por ahora. Escríbenos a soporte@plann.app para revisar tu caso.
+          </Text>
+        </View>
       ) : (
         <>
+          {organizerStatus === "rejected" && (
+            <View style={styles.section}>
+              <GlassCard level="card">
+                <View style={{ padding: 16, gap: 6 }}>
+                  <Text style={styles.sectionTitle}>No pudimos verificarte esta vez</Text>
+                  <Text style={styles.intro}>
+                    {organizerProfile?.rejectionReason ?? "Revisa tus datos y vuelve a enviarlos."}
+                  </Text>
+                </View>
+              </GlassCard>
+            </View>
+          )}
           <View style={styles.section}>
             <Text style={styles.intro}>
               Para publicar eventos de pago necesitamos verificar quién eres. Los eventos gratis se pueden publicar
@@ -102,7 +121,7 @@ export default function ActivarOrganizadorScreen() {
 
           <View style={styles.section}>
             <PrimaryButton
-              label="Solicitar verificación"
+              label={organizerStatus === "rejected" ? "Enviar de nuevo" : "Solicitar verificación"}
               disabled={!canSubmit}
               onPress={() => requestOrganizerVerification(name.trim(), document.trim())}
             />

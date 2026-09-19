@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Settings,
   LifeBuoy,
+  ClipboardCheck,
 } from "lucide-react";
 import { paymentQueue, withdrawals } from "@/lib/mock-data";
 
@@ -22,6 +23,7 @@ const NAV = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/pagos", label: "Pagos y conciliación", icon: Banknote, badgeKey: "pagos" as const },
   { href: "/admin/retiros", label: "Retiros", icon: Wallet, badgeKey: "retiros" as const },
+  { href: "/admin/solicitudes", label: "Solicitudes", icon: ClipboardCheck },
   { href: "/admin/organizadores", label: "Organizadores", icon: Building2 },
   { href: "/admin/eventos", label: "Eventos y moderación", icon: CalendarDays },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },

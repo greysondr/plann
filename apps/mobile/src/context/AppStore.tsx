@@ -47,7 +47,27 @@ function uuidv4(): string {
 function mapOrganizerStatus(dbStatus: string): OrganizerStatus {
   if (dbStatus === "verificado") return "verified";
   if (dbStatus === "pendiente") return "pending";
-  return "none"; // rechazado / suspendido: el MVP no distingue estos casos todavía
+  if (dbStatus === "rechazado") return "rejected";
+  if (dbStatus === "suspendido") return "suspended";
+  return "none";
+}
+
+// Errores de las funciones de Postgres (raise exception 'xxx') -> texto para el usuario.
+const DB_ERROR_MESSAGES: Record<string, string> = {
+  insufficient_balance: "No tienes saldo suficiente para ese monto.",
+  below_minimum: "El retiro mínimo es de $5,00.",
+  account_required: "Escribe los datos de la cuenta donde quieres recibir el pago.",
+  organizer_not_verified: "Tu cuenta de organizador todavía no está verificada.",
+  quantity_below_sold: "El cupo no puede ser menor a lo que ya se vendió.",
+  event_closed: "Este evento ya está cerrado y no se puede modificar.",
+  reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
+  sales_paused: "El organizador pausó las ventas de este evento.",
+};
+
+function dbErrorMessage(message: string | undefined, fallback: string): string {
+  if (!message) return fallback;
+  const key = Object.keys(DB_ERROR_MESSAGES).find((k) => message.includes(k));
+  return key ? DB_ERROR_MESSAGES[key] : fallback;
 }
 
 interface CreateOrderResult {
@@ -59,7 +79,35 @@ interface CreateOrderResult {
 export interface OrganizerProfile {
   name: string;
   document: string;
+  rejectionReason?: string;
+  payoutMethod?: PaymentMethod;
+  payoutAccount?: string;
 }
+
+export interface Withdrawal {
+  id: string;
+  amountCents: number;
+  method: PaymentMethod;
+  account: string;
+  status: "pendiente" | "pagado" | "rechazado";
+  requestedAt: string;
+}
+
+export interface OrganizerBalance {
+  netPaidCents: number;
+  withdrawnCents: number;
+  pendingCents: number;
+  availableCents: number;
+}
+
+export interface EventEditInput {
+  title: string;
+  description: string;
+  venueName: string;
+  startsAt: string;
+}
+
+type Result = { ok: boolean; reason?: string };
 
 export interface NewEventInput {
   title: string;
@@ -92,6 +140,8 @@ interface AppStoreValue {
   organizerStatus: OrganizerStatus;
   organizerProfile: OrganizerProfile | null;
   myOrganizerId: string | null;
+  balance: OrganizerBalance;
+  withdrawals: Withdrawal[];
 
   rateApplied: number;
   points: number;
@@ -108,6 +158,11 @@ interface AppStoreValue {
   toggleReminder: (eventId: string) => Promise<boolean>;
   requestOrganizerVerification: (name: string, document: string) => Promise<void>;
   createEvent: (input: NewEventInput) => Promise<boolean>;
+  updateEvent: (eventId: string, input: EventEditInput) => Promise<Result>;
+  updateTicketType: (ticketTypeId: string, priceCents: number, quantity: number) => Promise<Result>;
+  setSalesPaused: (eventId: string, paused: boolean) => Promise<Result>;
+  cancelEvent: (eventId: string, reason: string) => Promise<Result & { refunds?: number }>;
+  requestWithdrawal: (amountCents: number, method: PaymentMethod, account: string) => Promise<Result>;
   ticketsForOrder: (orderId: string) => TicketRecord[];
   getOrganizer: (id: string | null | undefined) => Organizer | undefined;
 }
@@ -134,6 +189,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [organizerStatus, setOrganizerStatus] = useState<OrganizerStatus>("none");
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
   const [myOrganizerId, setMyOrganizerId] = useState<string | null>(null);
+  const [balance, setBalance] = useState<OrganizerBalance>({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
 
   const userId = session?.user.id ?? null;
@@ -209,6 +266,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       isFeatured: false,
       isFree: ticketTypes.length > 0 && ticketTypes.every((t) => t.priceCents === 0),
       sourceCurated: row.source === "curated",
+      status: row.status,
+      salesPaused: !!row.sales_paused,
+      cancelReason: row.cancelled_reason ?? undefined,
     };
     return { event, organizer: org };
   }
@@ -239,13 +299,19 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const fetchMyOrganizer = useCallback(async (uid: string) => {
     const { data } = await supabase
       .from("organizers")
-      .select("id, name, legal_document, verification_status")
+      .select("id, name, legal_document, verification_status, rejection_reason, payout_method, payout_account")
       .eq("owner_user_id", uid)
       .maybeSingle();
     if (data) {
       setMyOrganizerId(data.id);
       setOrganizerStatus(mapOrganizerStatus(data.verification_status));
-      setOrganizerProfile({ name: data.name, document: data.legal_document ?? "" });
+      setOrganizerProfile({
+        name: data.name,
+        document: data.legal_document ?? "",
+        rejectionReason: data.rejection_reason ?? undefined,
+        payoutMethod: (data.payout_method as PaymentMethod) ?? undefined,
+        payoutAccount: data.payout_account ?? undefined,
+      });
     } else {
       setMyOrganizerId(null);
       setOrganizerStatus("none");
@@ -256,7 +322,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   function mapOrderRow(row: any, payment: any): Order {
     const status: Order["status"] =
-      row.status === "refunded" || row.status === "partially_refunded" ? "paid" : (row.status as Order["status"]);
+      row.status === "partially_refunded" ? "paid" : (row.status as Order["status"]);
     return {
       id: row.id,
       eventId: row.event_id,
@@ -303,6 +369,35 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("orders").select("*").in("event_id", eventIds).order("created_at", { ascending: false })
     );
     setOrganizerOrders(rows);
+  }, []);
+
+  // --- Saldo y retiros del organizador -----------------------------------------
+  const fetchBalance = useCallback(async (organizerId: string | null) => {
+    if (!organizerId) {
+      setBalance({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
+      setWithdrawals([]);
+      return;
+    }
+    const [{ data: bal }, { data: wds }] = await Promise.all([
+      supabase.from("organizer_balances").select("*").eq("organizer_id", organizerId).maybeSingle(),
+      supabase.from("withdrawals").select("*").eq("organizer_id", organizerId).order("requested_at", { ascending: false }),
+    ]);
+    setBalance({
+      netPaidCents: Number(bal?.net_paid_cents ?? 0),
+      withdrawnCents: Number(bal?.withdrawn_cents ?? 0),
+      pendingCents: Number(bal?.pending_withdrawal_cents ?? 0),
+      availableCents: Number(bal?.balance_available_cents ?? 0),
+    });
+    setWithdrawals(
+      (wds ?? []).map((w: any) => ({
+        id: w.id,
+        amountCents: w.amount_cents,
+        method: w.method,
+        account: w.reference ?? "",
+        status: w.status,
+        requestedAt: w.requested_at,
+      }))
+    );
   }, []);
 
   // --- Datos propios del comprador: órdenes, tickets, favoritos, puntos ------
@@ -386,6 +481,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setOrganizerStatus("none");
         setOrganizerProfile(null);
         setMyOrganizerId(null);
+        setOrganizerOrders([]);
+        setBalance({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
+        setWithdrawals([]);
       }
     });
 
@@ -455,6 +553,23 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   }, [myOrganizerId, myEventIds, fetchOrganizerOrders]);
 
   useEffect(() => {
+    fetchBalance(myOrganizerId);
+  }, [myOrganizerId, organizerOrders, fetchBalance]);
+
+  useEffect(() => {
+    if (!myOrganizerId) return;
+    const channel = supabase
+      .channel(`plann-organizer-withdrawals-${myOrganizerId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "withdrawals", filter: `organizer_id=eq.${myOrganizerId}` }, () => {
+        fetchBalance(myOrganizerId);
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [myOrganizerId, fetchBalance]);
+
+  useEffect(() => {
     if (!myOrganizerId) return;
     const channel = supabase
       .channel(`plann-organizer-orders-${myOrganizerId}`)
@@ -498,7 +613,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       if (error || !data) {
         const reason = error?.message.includes("sold_out")
           ? "Se agotaron mientras completabas el pago. No te cobramos."
-          : "No se pudo reservar el ticket. Intenta de nuevo.";
+          : dbErrorMessage(error?.message, "No se pudo reservar el ticket. Intenta de nuevo.");
         return { ok: false, reason };
       }
       if (userId) await fetchUserData(userId);
@@ -589,6 +704,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const requestOrganizerVerification = useCallback(
     async (name: string, document: string) => {
       if (!userId) return;
+      if (myOrganizerId) {
+        const { error: retryError } = await supabase
+          .from("organizers")
+          .update({ name, legal_document: document, verification_status: "pendiente" })
+          .eq("id", myOrganizerId);
+        if (!retryError) await fetchMyOrganizer(userId);
+        return;
+      }
       const barquisimetoId = cityIdByName.current.get("Barquisimeto") ?? null;
       const { error } = await supabase.from("organizers").insert({
         owner_user_id: userId,
@@ -602,7 +725,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       });
       if (!error) await fetchMyOrganizer(userId);
     },
-    [userId, fetchMyOrganizer]
+    [userId, myOrganizerId, fetchMyOrganizer]
   );
 
   // Sube la foto elegida al bucket "event-images" y devuelve su URL pública.
@@ -673,6 +796,74 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     [myOrganizerId, fetchEvents]
   );
 
+  const updateEvent = useCallback(
+    async (eventId: string, input: EventEditInput): Promise<Result> => {
+      const { error } = await supabase
+        .from("events")
+        .update({
+          title: input.title,
+          description: input.description,
+          venue_name: input.venueName,
+          starts_at: input.startsAt,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", eventId);
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar. Intenta de nuevo.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const updateTicketType = useCallback(
+    async (ticketTypeId: string, priceCents: number, quantity: number): Promise<Result> => {
+      const { error } = await supabase
+        .from("ticket_types")
+        .update({ price_cents: priceCents, quantity, updated_at: new Date().toISOString() })
+        .eq("id", ticketTypeId);
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo guardar la entrada.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const setSalesPaused = useCallback(
+    async (eventId: string, paused: boolean): Promise<Result> => {
+      const { error } = await supabase.from("events").update({ sales_paused: paused }).eq("id", eventId);
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo cambiar el estado de las ventas.") };
+      await fetchEvents(myOrganizerId);
+      return { ok: true };
+    },
+    [myOrganizerId, fetchEvents]
+  );
+
+  const cancelEvent = useCallback(
+    async (eventId: string, reason: string) => {
+      const { data, error } = await supabase.rpc("cancel_event", { p_event_id: eventId, p_reason: reason });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo cancelar el evento.") };
+      await fetchEvents(myOrganizerId);
+      await fetchOrganizerOrders(myOrganizerId, myEventIds);
+      return { ok: true, refunds: Number(data ?? 0) };
+    },
+    [myOrganizerId, myEventIds, fetchEvents, fetchOrganizerOrders]
+  );
+
+  const requestWithdrawal = useCallback(
+    async (amountCents: number, method: PaymentMethod, account: string): Promise<Result> => {
+      const { error } = await supabase.rpc("request_withdrawal", {
+        p_amount_cents: amountCents,
+        p_method: method,
+        p_account: account,
+      });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo solicitar el retiro.") };
+      await fetchBalance(myOrganizerId);
+      if (userId) await fetchMyOrganizer(userId);
+      return { ok: true };
+    },
+    [myOrganizerId, userId, fetchBalance, fetchMyOrganizer]
+  );
+
   const ticketsForOrder = useCallback((orderId: string) => tickets.filter((t) => t.orderId === orderId), [tickets]);
 
   const getOrganizer = useCallback((id: string | null | undefined) => (id ? organizersById[id] : undefined), [organizersById]);
@@ -697,6 +888,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       organizerStatus,
       organizerProfile,
       myOrganizerId,
+      balance,
+      withdrawals,
       rateApplied,
       points,
       tier,
@@ -710,6 +903,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       toggleReminder,
       requestOrganizerVerification,
       createEvent,
+      updateEvent,
+      updateTicketType,
+      setSalesPaused,
+      cancelEvent,
+      requestWithdrawal,
       ticketsForOrder,
       getOrganizer,
     }),
@@ -728,6 +926,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       organizerStatus,
       organizerProfile,
       myOrganizerId,
+      balance,
+      withdrawals,
       rateApplied,
       points,
       tier,
@@ -741,6 +941,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       toggleReminder,
       requestOrganizerVerification,
       createEvent,
+      updateEvent,
+      updateTicketType,
+      setSalesPaused,
+      cancelEvent,
+      requestWithdrawal,
       ticketsForOrder,
       getOrganizer,
     ]

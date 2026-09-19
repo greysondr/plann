@@ -223,8 +223,8 @@ export default function EventDetailScreen() {
               {!event.isFree && <Text style={styles.bottomPriceBs}>≈ {formatBs(totals.totalBs)} · tasa de hoy</Text>}
             </View>
             <PrimaryButton
-              label={available <= 0 ? "Agotado" : actionLabel}
-              disabled={available <= 0}
+              label={event.status === "cancelled" ? "Cancelado" : event.salesPaused ? "Ventas pausadas" : available <= 0 ? "Agotado" : actionLabel}
+              disabled={available <= 0 || event.salesPaused || event.status === "cancelled"}
               onPress={() =>
                 router.push(`/checkout/${event.id}?ticketTypeId=${ticketType.id}&quantity=${quantity}`)
               }

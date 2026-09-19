@@ -30,7 +30,7 @@ export function TicketCard({ ticket, event, ticketTypeName }: { ticket: TicketRe
         <Text style={styles.meta}>{event.venueName}</Text>
         <View style={[styles.statusPill, isValid ? styles.statusValid : styles.statusUsed]}>
           <Text style={[styles.statusText, isValid ? styles.statusTextValid : styles.statusTextUsed]}>
-            {STATUS_LABEL[ticket.status]}
+            {event.status === "cancelled" ? "Evento cancelado" : STATUS_LABEL[ticket.status]}
           </Text>
         </View>
       </View>

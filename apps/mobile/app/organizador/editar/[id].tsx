@@ -1,0 +1,358 @@
+import React, { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Calendar } from "react-native-calendars";
+import "../../../src/utils/calendarLocale";
+import { GlassCard } from "../../../src/components/GlassCard";
+import { Chip } from "../../../src/components/Chip";
+import { PrimaryButton } from "../../../src/components/Button";
+import { ChevronRight } from "../../../src/components/icons";
+import { useAppStore, useEvent } from "../../../src/context/AppStore";
+import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
+import { formatEventDate, formatShortDate } from "../../../src/utils/format";
+import { fromCalendarDateString, toCalendarDateString } from "../../../src/utils/eventFilters";
+import { formatUsd } from "../../../src/core/pricing";
+import type { TicketType } from "../../../src/core/types";
+import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
+
+const TIME_SLOTS = [
+  { label: "10:00 a.m.", hour: 10, minute: 0 },
+  { label: "3:00 p.m.", hour: 15, minute: 0 },
+  { label: "8:00 p.m.", hour: 20, minute: 0 },
+  { label: "10:00 p.m.", hour: 22, minute: 0 },
+];
+
+type Message = { text: string; error: boolean } | null;
+
+function TicketTypeEditor({ ticketType }: { ticketType: TicketType }) {
+  const { updateTicketType } = useAppStore();
+  const [price, setPrice] = useState((ticketType.priceCents / 100).toString());
+  const [quantity, setQuantity] = useState(String(ticketType.quantity));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<Message>(null);
+
+  const priceCents = Math.round(parseFloat(price.replace(",", ".")) * 100);
+  const quantityNum = parseInt(quantity, 10);
+  const valid =
+    Number.isFinite(priceCents) && priceCents >= 0 && Number.isInteger(quantityNum) && quantityNum >= ticketType.sold + ticketType.reserved;
+  const changed = priceCents !== ticketType.priceCents || quantityNum !== ticketType.quantity;
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    const result = await updateTicketType(ticketType.id, priceCents, quantityNum);
+    setSaving(false);
+    setMessage(result.ok ? { text: "Entrada actualizada.", error: false } : { text: result.reason ?? "No se pudo guardar.", error: true });
+  }
+
+  return (
+    <GlassCard level="card">
+      <View style={{ padding: 14, gap: 10 }}>
+        <Text style={styles.ticketName}>{ticketType.name}</Text>
+        <Text style={styles.hint}>
+          {ticketType.sold} vendidas{ticketType.reserved > 0 ? ` · ${ticketType.reserved} reservadas` : ""}
+        </Text>
+        <View style={styles.twoCols}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.smallLabel}>Precio USD</Text>
+            <TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" style={styles.input} placeholderTextColor={color.text4} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.smallLabel}>Cupo total</Text>
+            <TextInput value={quantity} onChangeText={setQuantity} keyboardType="number-pad" style={styles.input} placeholderTextColor={color.text4} />
+          </View>
+        </View>
+        {!valid && quantityNum < ticketType.sold + ticketType.reserved && (
+          <Text style={styles.messageError}>El cupo no puede ser menor a {ticketType.sold + ticketType.reserved}, lo que ya se vendió o está reservado.</Text>
+        )}
+        {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
+        <PrimaryButton label="Guardar entrada" disabled={!valid || !changed} loading={saving} onPress={save} />
+      </View>
+    </GlassCard>
+  );
+}
+
+export default function EditarEventoScreen() {
+  const allowed = useOrganizerGuard();
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const event = useEvent(id);
+  const { updateEvent, setSalesPaused, cancelEvent, organizerOrders } = useAppStore();
+
+  const original = event ? new Date(event.startsAt) : null;
+  const originalSlot = original ? TIME_SLOTS.findIndex((s) => s.hour === original.getHours() && s.minute === original.getMinutes()) : -1;
+
+  const [title, setTitle] = useState(event?.title ?? "");
+  const [venueName, setVenueName] = useState(event?.venueName ?? "");
+  const [description, setDescription] = useState(event?.description ?? "");
+  const [date, setDate] = useState<string | null>(original ? toCalendarDateString(original) : null);
+  const [slotIndex, setSlotIndex] = useState<number | null>(originalSlot >= 0 ? originalSlot : null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<Message>(null);
+  const [salesMessage, setSalesMessage] = useState<Message>(null);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [reason, setReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState<Message>(null);
+
+  if (!allowed) return null;
+  if (!event || !original) {
+    return (
+      <View style={[styles.center, { paddingTop: insets.top + 40 }]}>
+        <Text style={styles.hint}>No encontramos este evento.</Text>
+      </View>
+    );
+  }
+
+  const cancelled = event.status === "cancelled";
+  const paidOrdersCount = organizerOrders.filter((o) => o.eventId === event.id && o.status === "paid").length;
+
+  async function saveDetails() {
+    if (!date || !original) return;
+    const startsAt = fromCalendarDateString(date);
+    if (slotIndex !== null) startsAt.setHours(TIME_SLOTS[slotIndex].hour, TIME_SLOTS[slotIndex].minute, 0, 0);
+    else startsAt.setHours(original.getHours(), original.getMinutes(), 0, 0);
+
+    setSaving(true);
+    setMessage(null);
+    const result = await updateEvent(event!.id, {
+      title: title.trim(),
+      description: description.trim(),
+      venueName: venueName.trim(),
+      startsAt: startsAt.toISOString(),
+    });
+    setSaving(false);
+    setMessage(result.ok ? { text: "Cambios guardados.", error: false } : { text: result.reason ?? "No se pudo guardar.", error: true });
+  }
+
+  async function toggleSales() {
+    setSalesMessage(null);
+    const result = await setSalesPaused(event!.id, !event!.salesPaused);
+    if (!result.ok) setSalesMessage({ text: result.reason ?? "No se pudo cambiar.", error: true });
+  }
+
+  async function confirmCancel() {
+    setCancelling(true);
+    setCancelMessage(null);
+    const result = await cancelEvent(event!.id, reason);
+    setCancelling(false);
+    if (!result.ok) setCancelMessage({ text: result.reason ?? "No se pudo cancelar.", error: true });
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 80 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()}>
+          <View style={{ transform: [{ rotate: "180deg" }] }}>
+            <ChevronRight color={color.text} />
+          </View>
+        </Pressable>
+        <Text style={styles.title}>Editar evento</Text>
+        <View style={{ width: 18 }} />
+      </View>
+
+      {cancelled ? (
+        <View style={styles.section}>
+          <GlassCard level="card">
+            <View style={{ padding: 16, gap: 6 }}>
+              <Text style={styles.ticketName}>Este evento fue cancelado</Text>
+              <Text style={styles.hint}>Motivo: {event.cancelReason ?? "sin especificar"}</Text>
+              <Text style={styles.hint}>Los pagos confirmados quedaron marcados para reembolso y ya no cuentan en tu saldo.</Text>
+            </View>
+          </GlassCard>
+        </View>
+      ) : (
+        <>
+          <View style={styles.section}>
+            <Text style={styles.eventName}>{event.title}</Text>
+            <Text style={styles.hint}>{formatEventDate(event.startsAt)}</Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Detalles</Text>
+            <Text style={styles.smallLabel}>Nombre</Text>
+            <TextInput value={title} onChangeText={setTitle} style={styles.input} placeholderTextColor={color.text4} />
+            <Text style={[styles.smallLabel, { marginTop: 12 }]}>Lugar</Text>
+            <TextInput value={venueName} onChangeText={setVenueName} style={styles.input} placeholderTextColor={color.text4} />
+            <Text style={[styles.smallLabel, { marginTop: 12 }]}>Descripción</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              style={[styles.input, styles.textArea]}
+              placeholderTextColor={color.text4}
+            />
+
+            <Text style={[styles.smallLabel, { marginTop: 12 }]}>Fecha</Text>
+            <View style={styles.calendarCard}>
+              <Calendar
+                current={date ?? toCalendarDateString(new Date())}
+                minDate={toCalendarDateString(new Date())}
+                onDayPress={(day: { dateString: string }) => setDate(day.dateString)}
+                markedDates={date ? { [date]: { selected: true, selectedColor: color.pink } } : {}}
+                firstDay={1}
+                theme={{
+                  backgroundColor: "transparent",
+                  calendarBackground: "transparent",
+                  textSectionTitleColor: color.text3,
+                  dayTextColor: color.text,
+                  todayTextColor: color.pink,
+                  monthTextColor: color.text,
+                  textDisabledColor: color.text4,
+                  arrowColor: color.pink,
+                  selectedDayBackgroundColor: color.pink,
+                  selectedDayTextColor: color.white,
+                  textDayFontFamily: fontFamily.semiBold,
+                  textMonthFontFamily: fontFamily.extraBold,
+                  textDayHeaderFontFamily: fontFamily.bold,
+                }}
+                style={{ backgroundColor: "transparent" }}
+              />
+            </View>
+            {date && <Text style={styles.hint}>{formatShortDate(fromCalendarDateString(date).toISOString())}</Text>}
+
+            <Text style={[styles.smallLabel, { marginTop: 12 }]}>Hora</Text>
+            <View style={styles.chipsWrap}>
+              {TIME_SLOTS.map((slot, idx) => (
+                <Chip key={slot.label} label={slot.label} selected={slotIndex === idx} onPress={() => setSlotIndex(idx)} />
+              ))}
+            </View>
+            {slotIndex === null && <Text style={styles.hint}>Se mantiene la hora actual del evento.</Text>}
+
+            {message && <Text style={[styles.message, message.error && styles.messageError]}>{message.text}</Text>}
+            <PrimaryButton
+              label="Guardar cambios"
+              disabled={title.trim().length < 3 || !date}
+              loading={saving}
+              onPress={saveDetails}
+              style={{ marginTop: 14 }}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Entradas</Text>
+            <View style={{ gap: 12 }}>
+              {event.ticketTypes.map((tt) => (
+                <TicketTypeEditor key={tt.id} ticketType={tt} />
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ventas</Text>
+            <GlassCard level="card">
+              <View style={{ padding: 14, gap: 10 }}>
+                <Text style={styles.ticketName}>{event.salesPaused ? "Las ventas están pausadas" : "Las ventas están abiertas"}</Text>
+                <Text style={styles.hint}>
+                  {event.salesPaused
+                    ? "Tu evento se sigue viendo, pero nadie puede comprar hasta que las reanudes."
+                    : "Pausa las ventas si necesitas frenar la compra sin cancelar el evento."}
+                </Text>
+                {salesMessage && <Text style={styles.messageError}>{salesMessage.text}</Text>}
+                <Pressable style={styles.outlineButton} onPress={toggleSales}>
+                  <Text style={styles.outlineButtonText}>{event.salesPaused ? "Reanudar ventas" : "Pausar ventas"}</Text>
+                </Pressable>
+              </View>
+            </GlassCard>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Cancelar evento</Text>
+            <GlassCard level="card">
+              <View style={{ padding: 14, gap: 10 }}>
+                {!confirmingCancel ? (
+                  <>
+                    <Text style={styles.hint}>
+                      Si lo cancelas, se cierra la venta, se anulan los tickets y los pagos confirmados quedan por reembolsar. No se puede deshacer.
+                    </Text>
+                    <Pressable style={styles.outlineButton} onPress={() => setConfirmingCancel(true)}>
+                      <Text style={styles.outlineButtonText}>Cancelar este evento</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.ticketName}>
+                      {paidOrdersCount > 0
+                        ? `Vas a reembolsar ${paidOrdersCount} ${paidOrdersCount === 1 ? "compra" : "compras"}`
+                        : "Nadie ha comprado todavía"}
+                    </Text>
+                    <Text style={styles.smallLabel}>Motivo que verán tus compradores</Text>
+                    <TextInput
+                      value={reason}
+                      onChangeText={setReason}
+                      placeholder="Ej. Lluvia fuerte en la zona"
+                      placeholderTextColor={color.text4}
+                      style={styles.input}
+                    />
+                    {cancelMessage && <Text style={styles.messageError}>{cancelMessage.text}</Text>}
+                    <PrimaryButton
+                      label="Sí, cancelar evento"
+                      disabled={reason.trim().length < 5}
+                      loading={cancelling}
+                      onPress={confirmCancel}
+                    />
+                    <Pressable style={styles.outlineButton} onPress={() => setConfirmingCancel(false)}>
+                      <Text style={styles.outlineButtonText}>Mejor no</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </GlassCard>
+          </View>
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center" },
+  header: {
+    paddingHorizontal: spacing.screenX,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  title: { fontFamily: fontFamily.extraBold, fontSize: 18, color: color.text },
+  section: { paddingHorizontal: spacing.screenX, marginBottom: 26 },
+  sectionTitle: { fontFamily: fontFamily.extraBold, fontSize: 16, color: color.text, marginBottom: 10 },
+  eventName: { fontFamily: fontFamily.extraBold, fontSize: 20, color: color.text },
+  ticketName: { fontFamily: fontFamily.bold, fontSize: 15, color: color.text },
+  smallLabel: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.text2, marginBottom: 6 },
+  hint: { fontFamily: fontFamily.regular, fontSize: 12.5, color: color.text3, lineHeight: 18, marginTop: 4 },
+  input: {
+    height: 50,
+    borderRadius: radius.field,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(255,255,255,0.09)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    fontFamily: fontFamily.regular,
+    fontSize: 14,
+    color: color.text,
+  },
+  textArea: { height: 100, paddingTop: 14, textAlignVertical: "top" },
+  twoCols: { flexDirection: "row", gap: 10 },
+  chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  calendarCard: {
+    borderRadius: radius.cardLarge,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    overflow: "hidden",
+  },
+  message: { fontFamily: fontFamily.semiBold, fontSize: 13, color: color.text2, marginTop: 12 },
+  messageError: { fontFamily: fontFamily.semiBold, fontSize: 13, color: color.pink, marginTop: 4 },
+  outlineButton: {
+    minHeight: 46,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  outlineButtonText: { fontFamily: fontFamily.bold, fontSize: 14, color: color.text },
+});

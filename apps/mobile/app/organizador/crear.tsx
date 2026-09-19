@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Calendar, LocaleConfig } from "react-native-calendars";
+import { Calendar } from "react-native-calendars";
+import "../../src/utils/calendarLocale";
 import * as ImagePicker from "expo-image-picker";
 import { GlassCard } from "../../src/components/GlassCard";
 import { Chip } from "../../src/components/Chip";
@@ -14,17 +15,6 @@ import { formatShortDate } from "../../src/utils/format";
 import { fromCalendarDateString, toCalendarDateString } from "../../src/utils/eventFilters";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
 
-LocaleConfig.locales.es = {
-  monthNames: [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-  ],
-  monthNamesShort: ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
-  dayNames: ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"],
-  dayNamesShort: ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"],
-  today: "hoy",
-};
-LocaleConfig.defaultLocale = "es";
 
 const TIME_SLOTS = [
   { label: "10:00 a.m.", hour: 10, minute: 0 },

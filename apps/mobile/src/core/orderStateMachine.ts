@@ -6,7 +6,9 @@ const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   pending_payment: ["in_verification", "expired"],
   in_verification: ["paid", "rejected"],
   rejected: ["pending_payment", "cancelled"],
-  paid: [],
+  paid: ["refund_pending"],
+  refund_pending: ["refunded"],
+  refunded: [],
   expired: ["cancelled"],
   cancelled: [],
 };

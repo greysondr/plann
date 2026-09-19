@@ -21,7 +21,7 @@ export default function OrganizadorScreen() {
   const allowed = useOrganizerGuard();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { events, organizerOrders, organizerProfile, myOrganizerId } = useAppStore();
+  const { events, organizerOrders, organizerProfile, myOrganizerId, balance } = useAppStore();
 
   const myEvents = events.filter((e) => e.organizerId === myOrganizerId);
   const myEventIds = new Set(myEvents.map((e) => e.id));
@@ -54,6 +54,23 @@ export default function OrganizadorScreen() {
       </View>
 
       <View style={styles.section}>
+        <GlassCard level="card">
+          <View style={styles.balanceRow}>
+            <View>
+              <Text style={styles.statLabel}>Saldo disponible</Text>
+              <Text style={styles.balanceValue}>{formatUsd(balance.availableCents)}</Text>
+              {balance.pendingCents > 0 && (
+                <Text style={styles.statLabel}>{formatUsd(balance.pendingCents)} en proceso de pago</Text>
+              )}
+            </View>
+            <Pressable style={styles.withdrawButton} onPress={() => router.push("/organizador/retiros")}>
+              <Text style={styles.withdrawButtonText}>Retirar</Text>
+            </Pressable>
+          </View>
+        </GlassCard>
+      </View>
+
+      <View style={styles.section}>
         <View style={styles.statsGrid}>
           <GlassCard level="card" style={styles.statCard}>
             <View style={styles.statInner}>
@@ -72,7 +89,7 @@ export default function OrganizadorScreen() {
           </GlassCard>
           <GlassCard level="card" style={styles.statCard}>
             <View style={styles.statInner}>
-              <Text style={styles.statValue}>{myEvents.length}</Text>
+              <Text style={styles.statValue}>{myEvents.filter((e) => e.status !== "cancelled").length}</Text>
               <Text style={styles.statLabel}>Eventos publicados</Text>
             </View>
           </GlassCard>
@@ -113,7 +130,10 @@ export default function OrganizadorScreen() {
                     </Text>
                     <Text style={styles.eventRevenue}>{formatUsd(eventNetCents)}</Text>
                   </View>
-                  <Text style={styles.eventMeta}>{formatEventDate(event.startsAt)}</Text>
+                  <Text style={styles.eventMeta}>
+                    {formatEventDate(event.startsAt)}
+                    {event.status === "cancelled" ? " · Cancelado" : event.salesPaused ? " · Ventas pausadas" : ""}
+                  </Text>
                   <View style={styles.progressTrack}>
                     <View style={[styles.progressFill, { width: `${pct * 100}%` }]} />
                   </View>
@@ -122,16 +142,29 @@ export default function OrganizadorScreen() {
                   </Text>
                   <View style={styles.rowButtons}>
                     <Text style={styles.linkText}>Ver asistentes</Text>
-                    <Pressable
-                      onPress={(e) => {
-                        e.stopPropagation?.();
-                        router.push(`/organizador/escanear?eventId=${event.id}`);
-                      }}
-                      style={styles.scanChip}
-                    >
-                      <ScanIcon size={16} />
-                      <Text style={styles.scanChipText}>Escanear este evento</Text>
-                    </Pressable>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          router.push(`/organizador/editar/${event.id}`);
+                        }}
+                        style={styles.scanChip}
+                      >
+                        <Text style={styles.scanChipText}>Editar</Text>
+                      </Pressable>
+                      {event.status !== "cancelled" && (
+                        <Pressable
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            router.push(`/organizador/escanear?eventId=${event.id}`);
+                          }}
+                          style={styles.scanChip}
+                        >
+                          <ScanIcon size={16} />
+                          <Text style={styles.scanChipText}>Escanear</Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
                 </Pressable>
               </GlassCard>
@@ -200,6 +233,32 @@ const styles = StyleSheet.create({
     fontFamily: fontFamily.extraBold,
     fontSize: 20,
     color: color.text,
+  },
+  balanceRow: {
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  balanceValue: {
+    fontFamily: fontFamily.extraBold,
+    fontSize: 26,
+    color: color.text,
+    marginVertical: 2,
+  },
+  withdrawButton: {
+    paddingHorizontal: 20,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: color.pink,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  withdrawButtonText: {
+    fontFamily: fontFamily.bold,
+    fontSize: 14,
+    color: color.white,
   },
   statValueMuted: {
     fontFamily: fontFamily.bold,
