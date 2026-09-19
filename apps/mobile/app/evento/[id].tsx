@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,7 +25,10 @@ export default function EventDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(id);
-  const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer } = useAppStore();
+  const { favorites, toggleFavorite, reminders, toggleReminder, rateApplied, getOrganizer, recordEventView } = useAppStore();
+  useEffect(() => {
+    if (id) recordEventView(id);
+  }, [id, recordEventView]);
   const [quantity, setQuantity] = useState(1);
   const { width } = useWindowDimensions();
   const [photoIndex, setPhotoIndex] = useState(0);

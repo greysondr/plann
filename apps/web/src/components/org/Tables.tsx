@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { checkInAction } from "@/app/organizador/(panel)/actions";
+import { checkInAction, refundOrderAction } from "@/app/organizador/(panel)/actions";
+import { useActionState } from "react";
+import type { FormState } from "@/app/organizador/actions";
 import { Badge, Button, Table, Td, Th, Tr } from "@/components/ui";
 import { downloadCsv } from "@/lib/csv";
 import { usd } from "@/lib/format";
@@ -91,6 +93,32 @@ export function AttendeesTable({ eventId, eventTitle, attendees }: { eventId: st
   );
 }
 
+function RefundControl({ orderId }: { orderId: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState<FormState, FormData>(refundOrderAction.bind(null, orderId), {});
+  if (state.ok) return <span className="text-[12px] font-semibold text-success-ink">Anulada</span>;
+  if (!open)
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="text-[12.5px] font-bold text-foreground-3 hover:text-danger">
+        Reembolsar
+      </button>
+    );
+  return (
+    <form action={action} className="flex flex-col items-end gap-1.5">
+      <input name="reason" required minLength={5} placeholder="Motivo (lo ve el comprador)" className="w-56 rounded-full border border-border-strong bg-surface px-3 py-1.5 text-[12.5px] outline-none focus:border-pink" />
+      {state.error && <span className="text-[11.5px] font-semibold text-danger">{state.error}</span>}
+      <span className="flex gap-2">
+        <Button type="submit" variant="danger" disabled={pending}>
+          {pending ? "..." : "Confirmar"}
+        </Button>
+        <button type="button" onClick={() => setOpen(false)} className="text-[12px] font-bold text-foreground-3">
+          Cancelar
+        </button>
+      </span>
+    </form>
+  );
+}
+
 export interface SaleItem {
   id: string;
   date: string;
@@ -102,6 +130,8 @@ export interface SaleItem {
   net: number;
   status: string;
   currency: string | null;
+  comp?: boolean;
+  refundable?: boolean;
 }
 
 export function SalesTable({ sales }: { sales: SaleItem[] }) {
@@ -147,6 +177,7 @@ export function SalesTable({ sales }: { sales: SaleItem[] }) {
             <Th className="text-right">Comisión</Th>
             <Th className="text-right">Neto</Th>
             <Th>Estado</Th>
+            <Th className="text-right">Acción</Th>
           </tr>
         </thead>
         <tbody>
@@ -164,7 +195,9 @@ export function SalesTable({ sales }: { sales: SaleItem[] }) {
                 <Td className="text-right font-bold">{counted ? usd(s.net) : "—"}</Td>
                 <Td>
                   <OrderStatusBadge status={s.status} />
+                  {s.comp && <span className="ml-1 text-[11.5px] text-foreground-3">cortesía</span>}
                 </Td>
+                <Td className="text-right">{s.refundable && <RefundControl orderId={s.id} />}</Td>
               </Tr>
             );
           })}

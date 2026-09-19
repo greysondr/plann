@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { GlassCard } from "../../../src/components/GlassCard";
 import { Chip } from "../../../src/components/Chip";
@@ -34,13 +34,18 @@ const PAGE = 30;
 export default function VentasScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { events, myOrganizerId, analyticsOrders, organizerProfile } = useAppStore();
+  const { events, myOrganizerId, analyticsOrders, organizerProfile, refundOrder } = useAppStore();
+  const [refunding, setRefunding] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [refundMsg, setRefundMsg] = useState<string | null>(null);
+  const [refundBusy, setRefundBusy] = useState(false);
   const [state, setState] = useState("todos");
   const [eventId, setEventId] = useState<string | null>(null);
   const [shown, setShown] = useState(PAGE);
 
   const mine = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
   const titles = useMemo(() => new Map(mine.map((e) => [e.id, e.title])), [mine]);
+  const closedIds = useMemo(() => new Set(events.filter((e) => e.status === "cancelled" || e.status === "finished").map((e) => e.id)), [events]);
   const typeNames = useMemo(() => new Map(mine.flatMap((e) => e.ticketTypes.map((t) => [t.id, t.name] as const))), [mine]);
 
   const scoped = useMemo(() => {
@@ -110,9 +115,47 @@ export default function VentasScreen() {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={[styles.net, o.status !== "paid" && { color: color.text4 }]}>{o.status === "paid" ? formatUsd(o.organizer_net_cents) : "—"}</Text>
-                    {o.status === "paid" && <Text style={styles.meta}>de {formatUsd(o.subtotal_cents)}</Text>}
+                    {o.status === "paid" && !o.is_comp && <Text style={styles.meta}>de {formatUsd(o.subtotal_cents)}</Text>}
+                    {o.is_comp && <Text style={styles.meta}>cortesía</Text>}
+                    {o.status === "paid" && !o.is_comp && !closedIds.has(o.event_id) && (
+                      <Pressable
+                        hitSlop={8}
+                        onPress={() => {
+                          setRefunding(refunding === o.id ? null : o.id);
+                          setReason("");
+                          setRefundMsg(null);
+                        }}
+                      >
+                        <Text style={styles.refundLink}>Reembolsar</Text>
+                      </Pressable>
+                    )}
                   </View>
                 </View>
+                {refunding === o.id && (
+                  <View style={styles.refundBox}>
+                    <Text style={styles.meta}>El comprador recibe el motivo. La compra sale de tu saldo y se anulan sus entradas.</Text>
+                    <TextInput value={reason} onChangeText={setReason} placeholder="Motivo del reembolso" placeholderTextColor={color.text4} style={styles.refundInput} />
+                    {refundMsg && <Text style={[styles.meta, { color: color.pink }]}>{refundMsg}</Text>}
+                    <View style={{ flexDirection: "row", gap: 14, alignItems: "center" }}>
+                      <Pressable
+                        style={[styles.refundConfirm, (reason.trim().length < 5 || refundBusy) && { opacity: 0.4 }]}
+                        disabled={reason.trim().length < 5 || refundBusy}
+                        onPress={async () => {
+                          setRefundBusy(true);
+                          const r = await refundOrder(o.id, reason.trim());
+                          setRefundBusy(false);
+                          if (r.ok) setRefunding(null);
+                          else setRefundMsg(r.reason ?? "No se pudo reembolsar.");
+                        }}
+                      >
+                        <Text style={styles.refundConfirmText}>{refundBusy ? "..." : "Confirmar reembolso"}</Text>
+                      </Pressable>
+                      <Pressable onPress={() => setRefunding(null)}>
+                        <Text style={styles.meta}>Cancelar</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
               </View>
             ))}
           </GlassCard>
@@ -156,6 +199,11 @@ const styles = StyleSheet.create({
   meta: { fontFamily: fontFamily.semiBold, fontSize: 11.5, color: color.text3 },
   net: { fontFamily: fontFamily.extraBold, fontSize: 14, color: color.pink },
   divider: { height: 1, backgroundColor: "rgba(255,255,255,0.07)", marginLeft: 16 },
+  refundLink: { fontFamily: fontFamily.bold, fontSize: 11.5, color: color.text3, marginTop: 4 },
+  refundBox: { paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
+  refundInput: { height: 44, borderRadius: 14, paddingHorizontal: 14, backgroundColor: "rgba(255,255,255,0.09)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", fontFamily: fontFamily.regular, fontSize: 13.5, color: color.text },
+  refundConfirm: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: color.pink },
+  refundConfirmText: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.white },
   more: { alignSelf: "center", marginTop: 14, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" },
   moreText: { fontFamily: fontFamily.bold, fontSize: 13, color: color.text2 },
 });

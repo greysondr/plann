@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GlassCard } from "../../src/components/GlassCard";
@@ -34,6 +34,11 @@ export default function RetirosScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { balance, withdrawals, organizerProfile, requestWithdrawal } = useAppStore();
+  const RELEASE: Record<string, string> = {
+    basico: "3 días después de que termina cada evento",
+    pro: "3 días después de cada venta",
+    business: "24 horas después de cada venta",
+  };
 
   const [method, setMethod] = useState<PaymentMethod>(organizerProfile?.payoutMethod ?? "pago_movil");
   const [account, setAccount] = useState(organizerProfile?.payoutAccount ?? "");
@@ -46,6 +51,21 @@ export default function RetirosScreen() {
   const amountCents = Math.round(parseFloat(amount.replace(",", ".")) * 100);
   const validAmount = Number.isFinite(amountCents) && amountCents >= MIN_WITHDRAWAL_CENTS && amountCents <= balance.availableCents;
   const canSubmit = validAmount && account.trim().length >= 6 && !sending;
+
+  async function shareReceipt(w: (typeof withdrawals)[number]) {
+    const lines = [
+      "Comprobante de retiro - Plann",
+      `Estado: ${STATUS_LABEL[w.status]}`,
+      `Monto: ${formatUsd(w.amountCents)}`,
+      `Organizador: ${organizerProfile?.name ?? ""}`,
+      organizerProfile?.document ? `Cédula o RIF: ${organizerProfile.document}` : "",
+      `Método: ${METHOD_LABEL[w.method]}`,
+      `Cuenta de destino: ${w.account}`,
+      `Solicitado: ${new Date(w.requestedAt).toLocaleString("es-VE")}`,
+      `Referencia: ${w.id.slice(0, 8).toUpperCase()}`,
+    ].filter(Boolean);
+    await Share.share({ title: "Comprobante de retiro", message: lines.join("\n") });
+  }
 
   async function handleSubmit() {
     setSending(true);
@@ -81,6 +101,12 @@ export default function RetirosScreen() {
               <Text style={styles.breakdownText}>En proceso {formatUsd(balance.pendingCents)}</Text>
               <Text style={styles.breakdownText}>Ya retirado {formatUsd(balance.withdrawnCents)}</Text>
             </View>
+            {balance.releasePendingCents > 0 && (
+              <Text style={styles.releaseText}>
+                Por liberar {formatUsd(balance.releasePendingCents)} · Se libera {RELEASE[organizerProfile?.plan ?? "basico"]}.
+              </Text>
+            )}
+            {balance.refundPendingCents > 0 && <Text style={styles.releaseText}>Por reembolsar {formatUsd(balance.refundPendingCents)} (ya descontado de tu saldo).</Text>}
           </View>
         </GlassCard>
       </View>
@@ -143,7 +169,12 @@ export default function RetirosScreen() {
                       {METHOD_LABEL[w.method]} · {formatShortDate(w.requestedAt)}
                     </Text>
                   </View>
-                  <Text style={[styles.historyStatus, w.status === "pagado" && { color: color.pink }]}>{STATUS_LABEL[w.status]}</Text>
+                  <View style={{ alignItems: "flex-end", gap: 4 }}>
+                    <Text style={[styles.historyStatus, w.status === "pagado" && { color: color.pink }]}>{STATUS_LABEL[w.status]}</Text>
+                    <Pressable onPress={() => shareReceipt(w)} hitSlop={8}>
+                      <Text style={styles.receiptLink}>Comprobante</Text>
+                    </Pressable>
+                  </View>
                 </View>
               </GlassCard>
             ))}
@@ -168,6 +199,8 @@ const styles = StyleSheet.create({
   balanceLabel: { fontFamily: fontFamily.semiBold, fontSize: 12.5, color: color.text3 },
   balanceValue: { fontFamily: fontFamily.extraBold, fontSize: 30, color: color.text },
   breakdownRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
+  releaseText: { fontFamily: fontFamily.regular, fontSize: 12, lineHeight: 17, color: color.text3, marginTop: 8 },
+  receiptLink: { fontFamily: fontFamily.bold, fontSize: 12, color: color.pink },
   breakdownText: { fontFamily: fontFamily.semiBold, fontSize: 12, color: color.text3 },
   label: { fontFamily: fontFamily.bold, fontSize: 13, color: color.text2, marginTop: 14, marginBottom: 8 },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

@@ -17,7 +17,9 @@ import {
   deltaPct,
   funnel,
   sumBy,
+  totalViews,
   totalsBetween,
+  viewToPurchaseRate,
   weekdayDistribution,
 } from "../../../src/core/orgAnalytics";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
@@ -69,7 +71,7 @@ function QuickAction({ label, onPress, primary }: { label: string; onPress: () =
 export default function OrganizadorScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets } = useAppStore();
+  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets, analyticsViews } = useAppStore();
   const [range, setRange] = useState(30);
 
   const myEvents = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
@@ -90,10 +92,11 @@ export default function OrganizadorScreen() {
       att: attendance(analyticsTickets.filter((t) => finishedIds.has(t.event_id))),
       byEvent: sumBy(inRange, (o) => o.event_id, names).slice(0, 5),
       weekday: weekdayDistribution(inRange),
+      views: analyticsViews.filter((v) => v.day >= new Date(now.getTime() - range * DAY - 4 * 3600 * 1000).toISOString().slice(0, 10)),
       pending: analyticsOrders.filter((o) => o.status === "pending_payment" || o.status === "in_verification").length,
       names,
     };
-  }, [analyticsOrders, analyticsTickets, myEvents, range]);
+  }, [analyticsOrders, analyticsTickets, analyticsViews, myEvents, range]);
 
   if (!allowed) return null;
 
@@ -127,6 +130,7 @@ export default function OrganizadorScreen() {
             <View>
               <Text style={styles.kpiLabel}>Saldo disponible</Text>
               <Text style={styles.balanceValue}>{formatUsd(balance.availableCents)}</Text>
+              {balance.releasePendingCents > 0 && <Text style={styles.kpiHint}>+ {formatUsd(balance.releasePendingCents)} por liberar</Text>}
               {balance.pendingCents > 0 && <Text style={styles.kpiHint}>{formatUsd(balance.pendingCents)} en proceso de pago</Text>}
             </View>
             <Pressable style={styles.withdrawButton} onPress={() => router.push("/organizador/retiros")}>
@@ -162,6 +166,14 @@ export default function OrganizadorScreen() {
             label="Asistencia"
             value={stats.att.issued > 0 ? `${Math.round(stats.att.rate * 100)}%` : "—"}
             hint={stats.att.issued > 0 ? "eventos finalizados" : "sin finalizados"}
+          />
+          <Kpi
+            label="Visitas"
+            value={String(totalViews(stats.views))}
+            hint={(() => {
+              const r = viewToPurchaseRate(stats.cur.orders, totalViews(stats.views));
+              return r === null ? "sin visitas aún" : `${Math.round(r * 100)}% compró`;
+            })()}
           />
           <Kpi label="Compradores" value={String(stats.buyers.buyers)} hint={`${Math.round(stats.buyers.repeatRate * 100)}% recurrentes`} />
         </View>

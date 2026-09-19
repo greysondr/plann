@@ -33,6 +33,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const events = await loadEvents(organizer.id);
   const orders = await loadOrders(events.map((e) => e.id));
   const eventTitle = new Map(events.map((e) => [e.id, e.title]));
+  const closedEvents = new Set(events.filter((e) => ["cancelled", "finished"].includes(e.status)).map((e) => e.id));
   const typeName = new Map(events.flatMap((e) => e.ticket_types.map((t) => [t.id, t.name] as const)));
 
   const scoped = orders.filter((o) => (!evento || o.event_id === evento) && MATCH[state](o.status));
@@ -86,6 +87,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
             net: o.organizer_net_cents,
             status: o.status,
             currency: o.currency_paid,
+            comp: !!o.is_comp,
+            refundable: o.status === "paid" && !o.is_comp && !closedEvents.has(o.event_id),
           }))}
         />
       </Card>

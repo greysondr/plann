@@ -7,7 +7,7 @@ import { AreaChart, ColumnChart } from "../../../src/components/charts";
 import { ChevronRight } from "../../../src/components/icons";
 import { useAppStore, useEvent } from "../../../src/context/AppStore";
 import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
-import { attendance, checkinsByHour, cumulativeTickets, funnel, sumBy } from "../../../src/core/orgAnalytics";
+import { attendance, checkinsByHour, cumulativeTickets, eventSettlements, funnel, sumBy, totalViews, viewToPurchaseRate, viewsSeries } from "../../../src/core/orgAnalytics";
 import { formatUsd } from "../../../src/core/pricing";
 import { formatEventDate } from "../../../src/utils/format";
 import { color, fontFamily, spacing } from "../../../src/theme/tokens";
@@ -18,7 +18,7 @@ export default function AnaliticasEventoScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const event = useEvent(id);
-  const { analyticsOrders, analyticsTickets, setSalesPaused } = useAppStore();
+  const { analyticsOrders, analyticsTickets, analyticsViews, setSalesPaused } = useAppStore();
 
   const data = useMemo(() => {
     const orders = analyticsOrders.filter((o) => o.event_id === id);
@@ -32,9 +32,13 @@ export default function AnaliticasEventoScreen() {
       att: attendance(tickets),
       trend: cumulativeTickets(orders, event?.status === "finished" ? new Date(event.startsAt) : new Date()),
       arrivals: checkinsByHour(tickets),
+      settlement: eventSettlements(orders).get(id),
+      views: totalViews(analyticsViews, id),
+      viewsRate: viewToPurchaseRate(paid.length, totalViews(analyticsViews, id)),
+      viewsSeries: viewsSeries(analyticsViews, 30, new Date(), id),
       byType: sumBy(orders, (o) => o.ticket_type_id, new Map((event?.ticketTypes ?? []).map((t) => [t.id, t.name]))),
     };
-  }, [analyticsOrders, analyticsTickets, id, event]);
+  }, [analyticsOrders, analyticsTickets, analyticsViews, id, event]);
 
   if (!allowed || !event) return null;
 
@@ -78,6 +82,7 @@ export default function AnaliticasEventoScreen() {
           <Kpi label="Entradas vendidas" value={`${sold}/${cap}`} hint={`${cap ? Math.round((sold / cap) * 100) : 0}% del cupo`} />
           <Kpi label="Conversión" value={`${Math.round(data.fun.conversion * 100)}%`} hint={`${data.fun.expired + data.fun.cancelled} sin concretar`} />
           <Kpi label="Asistencia" value={data.att.used > 0 ? `${Math.round(data.att.rate * 100)}%` : "—"} hint={`${data.att.used} de ${data.att.issued} entraron`} />
+          <Kpi label="Visitas" value={String(data.views)} hint={data.viewsRate === null ? "sin visitas aún" : `${Math.round(data.viewsRate * 100)}% compró`} />
         </View>
       </View>
 
@@ -90,6 +95,31 @@ export default function AnaliticasEventoScreen() {
             ) : (
               <AreaChart data={data.trend.map((p) => ({ label: p.label, value: p.tickets }))} />
             )}
+          </View>
+        </GlassCard>
+      </View>
+
+      {data.views > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Visitas por día</Text>
+          <GlassCard level="card">
+            <View style={{ padding: 16 }}>
+              <ColumnChart data={data.viewsSeries.slice(-14).map((v) => ({ label: v.label, value: v.views }))} />
+            </View>
+          </GlassCard>
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Liquidación</Text>
+        <GlassCard level="card">
+          <View style={{ padding: 16, gap: 10 }}>
+            <SettleRow label="Bruto (precio de lista)" value={formatUsd(data.settlement?.grossCents ?? 0)} />
+            <SettleRow label="Cupones" value={data.settlement?.discountCents ? `−${formatUsd(data.settlement.discountCents)}` : "—"} />
+            <SettleRow label="Comisión de Plann" value={`−${formatUsd(data.settlement?.commissionCents ?? 0)}`} />
+            <SettleRow label={`Reembolsos (${data.settlement?.refundedOrders ?? 0})`} value={data.settlement?.refundedCents ? formatUsd(data.settlement.refundedCents) : "—"} />
+            <View style={styles.settleDivider} />
+            <SettleRow label="Neto para ti" value={formatUsd(data.settlement?.netCents ?? 0)} strong />
           </View>
         </GlassCard>
       </View>
@@ -155,6 +185,15 @@ export default function AnaliticasEventoScreen() {
   );
 }
 
+function SettleRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <View style={styles.typeRow}>
+      <Text style={strong ? styles.settleStrong : styles.meta}>{label}</Text>
+      <Text style={strong ? [styles.settleStrong, { color: color.pink }] : styles.settleValue}>{value}</Text>
+    </View>
+  );
+}
+
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <GlassCard level="card" style={{ width: "47.5%" }}>
@@ -183,6 +222,9 @@ const styles = StyleSheet.create({
   empty: { fontFamily: fontFamily.regular, fontSize: 13, color: color.text3 },
   alertBox: { padding: 14, borderRadius: 24, backgroundColor: "rgba(233,65,127,0.10)", borderWidth: 1, borderColor: "rgba(233,65,127,0.30)" },
   alertText: { fontFamily: fontFamily.semiBold, fontSize: 12.5, lineHeight: 18, color: color.text2 },
+  settleDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.08)" },
+  settleValue: { fontFamily: fontFamily.bold, fontSize: 13.5, color: color.text },
+  settleStrong: { fontFamily: fontFamily.extraBold, fontSize: 14.5, color: color.text },
   typeRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   typeName: { fontFamily: fontFamily.bold, fontSize: 14, color: color.text },
   typeRevenue: { fontFamily: fontFamily.extraBold, fontSize: 12.5, color: color.pink },

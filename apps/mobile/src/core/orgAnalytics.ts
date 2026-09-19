@@ -275,3 +275,131 @@ export function monthlySummary(orders: OrderRow[]): MonthRow[] {
   }
   return [...map.values()].sort((a, b) => (a.month < b.month ? 1 : -1));
 }
+
+// ---------------------------------------------------------------------------
+// Liquidación por evento (PLANN-PROYECTO.md 6.6: bruto, comisión, reembolsos, neto)
+// ---------------------------------------------------------------------------
+
+export interface EventSettlement {
+  eventId: string;
+  tickets: number;
+  grossCents: number; // a precio de lista, antes de cupones
+  discountCents: number;
+  commissionCents: number;
+  netCents: number; // lo que le queda al organizador de las ventas vigentes
+  refundedCents: number; // neto de compras reembolsadas o por reembolsar (ya fuera del saldo)
+  refundedOrders: number;
+}
+
+export function eventSettlements(orders: OrderRow[]): Map<string, EventSettlement> {
+  const map = new Map<string, EventSettlement>();
+  const get = (id: string) => {
+    let s = map.get(id);
+    if (!s) {
+      s = { eventId: id, tickets: 0, grossCents: 0, discountCents: 0, commissionCents: 0, netCents: 0, refundedCents: 0, refundedOrders: 0 };
+      map.set(id, s);
+    }
+    return s;
+  };
+  for (const o of orders) {
+    if (o.is_comp) continue;
+    if (o.status === "paid") {
+      const s = get(o.event_id);
+      s.tickets += o.quantity;
+      s.grossCents += o.subtotal_cents + (o.discount_cents ?? 0);
+      s.discountCents += o.discount_cents ?? 0;
+      s.commissionCents += o.commission_cents;
+      s.netCents += o.organizer_net_cents;
+    } else if (o.status === "refund_pending" || o.status === "refunded") {
+      const s = get(o.event_id);
+      s.refundedCents += o.organizer_net_cents;
+      s.refundedOrders += 1;
+    }
+  }
+  return map;
+}
+
+// ---------------------------------------------------------------------------
+// Visitas
+// ---------------------------------------------------------------------------
+
+export interface ViewRow {
+  event_id: string;
+  day: string; // YYYY-MM-DD (hora de Venezuela)
+  views: number;
+}
+
+export function totalViews(views: ViewRow[], eventId?: string): number {
+  return views.filter((v) => !eventId || v.event_id === eventId).reduce((s, v) => s + v.views, 0);
+}
+
+// Visitas por día, con ceros, para los últimos `days` días.
+export function viewsSeries(views: ViewRow[], days: number, now: Date = new Date(), eventId?: string): { date: string; label: string; views: number }[] {
+  const byDay = new Map<string, number>();
+  for (const v of views) {
+    if (eventId && v.event_id !== eventId) continue;
+    byDay.set(v.day, (byDay.get(v.day) ?? 0) + v.views);
+  }
+  const out: { date: string; label: string; views: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const key = dayKey(now.getTime() - i * DAY_MS);
+    out.push({ date: key, label: dayLabel(key), views: byDay.get(key) ?? 0 });
+  }
+  return out;
+}
+
+// De cada 100 visitas, cuántas terminan en una compra pagada. null si no hay visitas.
+export function viewToPurchaseRate(paidOrders: number, views: number): number | null {
+  return views > 0 ? Math.min(1, paidOrders / views) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Comparar eventos
+// ---------------------------------------------------------------------------
+
+export interface CompareRow {
+  eventId: string;
+  title: string;
+  startsAt: string;
+  status: string;
+  netCents: number;
+  tickets: number;
+  capacity: number;
+  sellThrough: number;
+  avgTicketCents: number;
+  conversion: number;
+  attendanceRate: number | null;
+  views: number;
+  viewToPurchase: number | null;
+}
+
+export function compareEvents(
+  events: { id: string; title: string; starts_at: string; status: string; capacity: number }[],
+  orders: OrderRow[],
+  tickets: TicketRow[],
+  views: ViewRow[]
+): CompareRow[] {
+  const settle = eventSettlements(orders);
+  return events.map((e) => {
+    const s = settle.get(e.id);
+    const evOrders = orders.filter((o) => o.event_id === e.id);
+    const att = attendance(tickets.filter((t) => t.event_id === e.id));
+    const paid = evOrders.filter(isPaid).length;
+    const v = totalViews(views, e.id);
+    return {
+      eventId: e.id,
+      title: e.title,
+      startsAt: e.starts_at,
+      status: e.status,
+      netCents: s?.netCents ?? 0,
+      tickets: s?.tickets ?? 0,
+      capacity: e.capacity,
+      sellThrough: e.capacity > 0 ? (s?.tickets ?? 0) / e.capacity : 0,
+      avgTicketCents: s && s.tickets > 0 ? Math.round((s.grossCents - s.discountCents) / s.tickets) : 0,
+      conversion: funnel(evOrders).conversion,
+      attendanceRate: att.issued > 0 && att.used > 0 ? att.rate : null,
+      views: v,
+      viewToPurchase: viewToPurchaseRate(paid, v),
+    };
+  });
+}

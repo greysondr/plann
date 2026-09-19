@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { requireOrganizer } from "@/lib/org/session";
-import { eventNames, loadBalance, loadEvents, loadOrders, loadTickets, ticketTypeNames } from "@/lib/org/data";
+import { eventNames, loadBalance, loadEvents, loadOrders, loadTickets, loadViews, pendingRelease, ticketTypeNames } from "@/lib/org/data";
 import {
   attendance,
   buyerStats,
   dailySeries,
   deltaPct,
+  totalViews,
+  viewToPurchaseRate,
+  viewsSeries,
   funnel,
   sumBy,
   totalsBetween,
@@ -28,7 +31,7 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
 
   const events = await loadEvents(organizer.id);
   const eventIds = events.map((e) => e.id);
-  const [orders, tickets, balance] = await Promise.all([loadOrders(eventIds), loadTickets(eventIds), loadBalance(organizer.id)]);
+  const [orders, tickets, balance, views] = await Promise.all([loadOrders(eventIds), loadTickets(eventIds), loadBalance(organizer.id), loadViews(eventIds, range)]);
 
   const now = new Date();
   const cur = totalsBetween(orders, new Date(now.getTime() - range * DAY), new Date(now.getTime() + 1));
@@ -52,6 +55,8 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
     .slice(0, 4);
   const names = eventNames(events);
   const typeNames = new Map(events.flatMap((e) => e.ticket_types.map((t) => [t.id, t.name] as const)));
+  const rangeViews = totalViews(views);
+  const viewRate = viewToPurchaseRate(cur.orders, rangeViews);
   const avgOrder = cur.orders > 0 ? cur.grossCents / cur.orders : 0;
   const netDelta = deltaText(deltaPct(cur.netCents, prev.netCents));
   const ticketsDelta = deltaText(deltaPct(cur.tickets, prev.tickets));
@@ -77,13 +82,14 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Ingresos netos" value={usd(cur.netCents)} delta={netDelta?.text} deltaTone={netDelta?.tone} hint={`vs ${usd(prev.netCents)}`} />
         <StatCard label="Entradas vendidas" value={String(cur.tickets)} delta={ticketsDelta?.text} deltaTone={ticketsDelta?.tone} hint={`${cur.orders} pedidos`} />
-        <StatCard label="Saldo disponible" value={usd(balance.balance_available_cents)} hint={balance.pending_withdrawal_cents > 0 ? `${usd(balance.pending_withdrawal_cents)} en proceso` : "listo para retirar"} />
+        <StatCard label="Saldo disponible" value={usd(balance.balance_available_cents)} hint={pendingRelease(balance) > 0 ? `+ ${usd(pendingRelease(balance))} por liberar` : balance.pending_withdrawal_cents > 0 ? `${usd(balance.pending_withdrawal_cents)} en proceso` : "listo para retirar"} />
         <StatCard label="Pedido promedio" value={usd(avgOrder)} hint="antes de comisión" />
       </div>
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Conversión de pedidos" value={pct(fun.conversion)} hint={`${fun.paid} pagados de ${fun.total - fun.pending} resueltos`} />
         <StatCard label="Asistencia" value={att.issued > 0 ? pct(att.rate) : "—"} hint={att.issued > 0 ? `${att.used} de ${att.issued} en eventos finalizados` : "aún no hay eventos finalizados"} />
+        <StatCard label="Visitas a tus eventos" value={String(rangeViews)} hint={viewRate === null ? "aún sin visitas" : `${pct(viewRate)} compró`} />
         <StatCard label="Compradores" value={String(buyers.buyers)} hint={`${pct(buyers.repeatRate)} han vuelto a comprar`} />
         <StatCard label="Eventos activos" value={String(events.filter((e) => ["published", "sold_out", "live"].includes(e.status)).length)} hint={`${events.length} en total`} />
       </div>
@@ -120,6 +126,15 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
           <CardHeader title="Cuándo compran" subtitle="Entradas por día de la semana" />
           <div className="p-4">
             <ColumnChart data={weekday.map((d) => ({ label: d.label, value: d.tickets }))} />
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-3">
+          <CardHeader title="Visitas por día" subtitle="Personas que abrieron tus eventos" />
+          <div className="p-4">
+            {rangeViews === 0 ? <EmptyState title="Aún no hay visitas" /> : <ColumnChart data={viewsSeries(views, Math.min(range, 30)).map((v) => ({ label: v.label, value: v.views }))} label="Visitas" />}
           </div>
         </Card>
       </div>

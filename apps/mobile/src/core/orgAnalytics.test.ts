@@ -110,3 +110,50 @@ test("las cortesías no cuentan como ventas ni en la conversión", () => {
   assert.equal(funnel([order({}), comp]).total, 1);
   assert.equal(buyerStats([comp]).buyers, 0);
 });
+
+import { compareEvents, eventSettlements, totalViews, viewToPurchaseRate, viewsSeries } from "./orgAnalytics.ts";
+
+test("liquidación por evento: bruto a precio de lista, descuentos, comisión, neto y reembolsos", () => {
+  const s = eventSettlements([
+    order({ subtotal_cents: 800, discount_cents: 200, commission_cents: 96, organizer_net_cents: 704 }),
+    order({ id: "b", subtotal_cents: 1000, commission_cents: 120, organizer_net_cents: 880 }),
+    order({ id: "c", status: "refund_pending", organizer_net_cents: 880 }),
+    order({ id: "d", is_comp: true, subtotal_cents: 0, organizer_net_cents: 0 }),
+  ]).get("e1")!;
+  assert.equal(s.tickets, 2);
+  assert.equal(s.grossCents, 2000);
+  assert.equal(s.discountCents, 200);
+  assert.equal(s.commissionCents, 216);
+  assert.equal(s.netCents, 1584);
+  assert.equal(s.refundedCents, 880);
+  assert.equal(s.refundedOrders, 1);
+});
+
+test("visitas: total, serie con ceros y tasa de visita a compra", () => {
+  const views = [
+    { event_id: "e1", day: "2026-09-10", views: 5 },
+    { event_id: "e1", day: "2026-09-12", views: 3 },
+    { event_id: "e2", day: "2026-09-12", views: 7 },
+  ];
+  assert.equal(totalViews(views), 15);
+  assert.equal(totalViews(views, "e1"), 8);
+  const series = viewsSeries(views, 4, new Date("2026-09-12T18:00:00Z"), "e1");
+  assert.deepEqual(series.map((p) => p.views), [0, 5, 0, 3]);
+  assert.equal(viewToPurchaseRate(2, 8), 0.25);
+  assert.equal(viewToPurchaseRate(2, 0), null);
+});
+
+test("comparar eventos une ventas, asistencia y visitas por evento", () => {
+  const rows = compareEvents(
+    [{ id: "e1", title: "A", starts_at: "2026-09-20T00:00:00Z", status: "published", capacity: 10 }],
+    [order({ quantity: 2, subtotal_cents: 2000, organizer_net_cents: 1760 })],
+    [{ id: "t1", event_id: "e1", ticket_type_id: "t1", status: "used", checked_in_at: null }, { id: "t2", event_id: "e1", ticket_type_id: "t1", status: "valid", checked_in_at: null }],
+    [{ event_id: "e1", day: "2026-09-10", views: 10 }]
+  );
+  assert.equal(rows[0].netCents, 1760);
+  assert.equal(rows[0].sellThrough, 0.2);
+  assert.equal(rows[0].avgTicketCents, 1000);
+  assert.equal(rows[0].attendanceRate, 0.5);
+  assert.equal(rows[0].views, 10);
+  assert.equal(rows[0].viewToPurchase, 0.1);
+});

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireOrganizer } from "@/lib/org/session";
-import { loadAnnouncements, loadAttendees, loadEvents, loadOrders, loadTickets } from "@/lib/org/data";
-import { attendance, checkinsByHour, cumulativeTickets, funnel, sumBy } from "@/lib/org/analytics";
+import { loadAnnouncements, loadAttendees, loadEvents, loadOrders, loadTickets, loadViews } from "@/lib/org/data";
+import { attendance, checkinsByHour, cumulativeTickets, eventSettlements, funnel, sumBy, totalViews, viewToPurchaseRate, viewsSeries } from "@/lib/org/analytics";
 import { longDateTime, pct, shortDate, usd } from "@/lib/format";
 import { Button, Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, Th, Tr } from "@/components/ui";
 import { AreaTrend, ColumnChart, Donut } from "@/components/org/charts";
@@ -20,7 +20,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
 
-  const [orders, tickets, attendees, announcements] = await Promise.all([loadOrders([id]), loadTickets([id]), loadAttendees(id), loadAnnouncements(id)]);
+  const [orders, tickets, attendees, announcements, views] = await Promise.all([loadOrders([id]), loadTickets([id]), loadAttendees(id), loadAnnouncements(id), loadViews([id], 90)]);
+  const settlement = eventSettlements(orders).get(id);
+  const viewCount = totalViews(views);
+  const viewRate = viewToPurchaseRate(orders.filter((o) => o.status === "paid" && !o.is_comp).length, viewCount);
 
   const sold = event.ticket_types.reduce((s, t) => s + t.sold, 0);
   const capacity = event.ticket_types.reduce((s, t) => s + t.quantity, 0);
@@ -75,7 +78,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         </Card>
       )}
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+        <StatCard label="Visitas" value={String(viewCount)} hint={viewRate === null ? "aún sin visitas" : `${pct(viewRate)} terminó comprando`} />
         <StatCard label="Ingresos netos" value={usd(net)} hint={`${usd(gross)} en ventas brutas`} />
         <StatCard label="Entradas vendidas" value={`${sold}/${capacity}`} hint={`${capacity ? pct(sold / capacity) : "0%"} del cupo`} />
         <StatCard label="Conversión" value={pct(fun.conversion)} hint={`${fun.paid} pagados, ${fun.expired + fun.cancelled} sin concretar`} />
@@ -115,6 +119,23 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               </div>
             )}
           </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card className="xl:col-span-2">
+          <CardHeader title="Visitas por día" subtitle="Personas que abrieron el evento (últimos 30 días)" />
+          <div className="p-4">{viewCount === 0 ? <EmptyState title="Aún no hay visitas" /> : <ColumnChart data={viewsSeries(views, 30).map((v) => ({ label: v.label, value: v.views }))} label="Visitas" />}</div>
+        </Card>
+        <Card>
+          <CardHeader title="Liquidación del evento" />
+          <dl className="space-y-2.5 p-5 text-[13.5px]">
+            <div className="flex justify-between"><dt className="text-foreground-3">Bruto (precio de lista)</dt><dd className="font-semibold">{usd(settlement?.grossCents ?? 0)}</dd></div>
+            <div className="flex justify-between"><dt className="text-foreground-3">Cupones</dt><dd className="font-semibold">{settlement?.discountCents ? `−${usd(settlement.discountCents)}` : "—"}</dd></div>
+            <div className="flex justify-between"><dt className="text-foreground-3">Comisión de Plann</dt><dd className="font-semibold">−{usd(settlement?.commissionCents ?? 0)}</dd></div>
+            <div className="flex justify-between"><dt className="text-foreground-3">Reembolsos ({settlement?.refundedOrders ?? 0})</dt><dd className="font-semibold">{settlement?.refundedCents ? usd(settlement.refundedCents) : "—"}</dd></div>
+            <div className="flex justify-between border-t border-border pt-2.5"><dt className="font-bold">Neto para ti</dt><dd className="font-extrabold text-pink">{usd(settlement?.netCents ?? 0)}</dd></div>
+          </dl>
         </Card>
       </div>
 

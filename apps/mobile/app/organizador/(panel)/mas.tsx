@@ -63,6 +63,10 @@ export default function MasScreen() {
             <Divider />
             <Row label="Ventas y pedidos" hint="Filtra y consulta cada pedido" onPress={() => router.push("/organizador/ventas")} />
             <Divider />
+            <Row label="Comparar eventos" hint="Cuál vende más y cuál convierte mejor" onPress={() => router.push("/organizador/comparar")} />
+            <Divider />
+            <Row label="Reportes" hint="Resumen mensual para tu contabilidad" onPress={() => router.push("/organizador/reportes")} />
+            <Divider />
             <Row label="Cupones" hint={coupons.length === 0 ? "Descuentos para tus compradores" : `${coupons.filter((c) => c.active).length} activos`} onPress={() => router.push("/organizador/cupones")} />
             <Divider />
             <Row label="Mi negocio" hint={organizerProfile?.name ?? "Perfil, logo y cuenta de cobro"} onPress={() => router.push("/organizador/negocio")} />

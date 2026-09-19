@@ -36,6 +36,12 @@ export interface BalanceRow {
   withdrawn_cents: number;
   pending_withdrawal_cents: number;
   balance_available_cents: number;
+  refund_pending_cents: number;
+}
+
+// Lo vendido que todavía no se libera para retirar (según el plan del organizador).
+export function pendingRelease(b: BalanceRow): number {
+  return Math.max(0, b.net_paid_cents - (b.balance_available_cents + b.withdrawn_cents + b.pending_withdrawal_cents));
 }
 
 export interface WithdrawalRow {
@@ -107,7 +113,7 @@ export async function loadBalance(organizerId: string): Promise<BalanceRow> {
   const supabase = await supabaseServer();
   const { data } = await supabase.from("organizer_balances").select("*").eq("organizer_id", organizerId).maybeSingle();
   return (
-    (data as BalanceRow | null) ?? { net_paid_cents: 0, withdrawn_cents: 0, pending_withdrawal_cents: 0, balance_available_cents: 0 }
+    (data as BalanceRow | null) ?? { net_paid_cents: 0, withdrawn_cents: 0, pending_withdrawal_cents: 0, balance_available_cents: 0, refund_pending_cents: 0 }
   );
 }
 
@@ -211,4 +217,11 @@ export async function loadAnnouncements(eventId: string): Promise<AnnouncementRo
   const supabase = await supabaseServer();
   const { data } = await supabase.from("announcements").select("id, message, recipients, created_at").eq("event_id", eventId).order("created_at", { ascending: false }).limit(5);
   return (data ?? []) as AnnouncementRow[];
+}
+
+export async function loadViews(eventIds: string[], days = 90): Promise<import("./analytics").ViewRow[]> {
+  if (eventIds.length === 0) return [];
+  const supabase = await supabaseServer();
+  const { data } = await supabase.rpc("event_view_stats", { p_event_ids: eventIds, p_days: days });
+  return ((data ?? []) as { event_id: string; day: string; views: number }[]).map((r) => ({ event_id: r.event_id, day: r.day, views: Number(r.views) }));
 }

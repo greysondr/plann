@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 import { cancelEventReminder, presentLocalNotification, registerPushToken, scheduleEventReminder } from "../lib/notifications";
 import { FIRST_PURCHASE_BONUS, getTierForPoints, type LoyaltyTier } from "../core/loyalty";
-import type { OrderRow, TicketRow } from "../core/orgAnalytics";
+import type { OrderRow, TicketRow, ViewRow } from "../core/orgAnalytics";
 import type {
   EventItem,
   LoyaltyEntry,
@@ -65,6 +65,9 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
   sales_paused: "El organizador pausó las ventas de este evento.",
+  order_not_refundable: "Esta compra ya no se puede reembolsar.",
+  tickets_used: "Alguien ya entró con estas entradas: no se puede reembolsar.",
+  comp_no_refund: "Las cortesías no se reembolsan.",
   invalid_count: "Puedes crear de 1 a 12 copias.",
   invalid_interval: "El intervalo entre copias no es válido.",
   sales_not_started: "La venta de esta entrada todavía no empieza.",
@@ -124,8 +127,10 @@ export interface Withdrawal {
 export interface OrganizerBalance {
   netPaidCents: number;
   withdrawnCents: number;
-  pendingCents: number;
-  availableCents: number;
+  pendingCents: number; // retiros solicitados, aún sin pagar
+  availableCents: number; // ya liberado y sin retirar
+  releasePendingCents: number; // vendido que todavía no se libera según el plan
+  refundPendingCents: number; // compras por reembolsar (ya fuera del saldo)
 }
 
 export interface EventEditInput {
@@ -242,6 +247,9 @@ interface AppStoreValue {
   withdrawals: Withdrawal[];
   analyticsOrders: OrderRow[];
   analyticsTickets: TicketRow[];
+  analyticsViews: ViewRow[];
+  recordEventView: (eventId: string) => Promise<void>;
+  refundOrder: (orderId: string, reason: string) => Promise<Result>;
   notifications: AppNotification[];
   unreadCount: number;
   markNotificationsRead: (ids?: string[]) => Promise<void>;
@@ -291,6 +299,8 @@ interface AppStoreValue {
 
 const AppStoreContext = createContext<AppStoreValue | null>(null);
 
+const EMPTY_BALANCE: OrganizerBalance = { netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0, releasePendingCents: 0, refundPendingCents: 0 };
+
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -311,10 +321,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [organizerStatus, setOrganizerStatus] = useState<OrganizerStatus>("none");
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
   const [myOrganizerId, setMyOrganizerId] = useState<string | null>(null);
-  const [balance, setBalance] = useState<OrganizerBalance>({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
+  const [balance, setBalance] = useState<OrganizerBalance>(EMPTY_BALANCE);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [analyticsOrders, setAnalyticsOrders] = useState<OrderRow[]>([]);
   const [analyticsTickets, setAnalyticsTickets] = useState<TicketRow[]>([]);
+  const [analyticsViews, setAnalyticsViews] = useState<ViewRow[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -511,7 +522,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   // --- Saldo y retiros del organizador -----------------------------------------
   const fetchBalance = useCallback(async (organizerId: string | null) => {
     if (!organizerId) {
-      setBalance({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
+      setBalance(EMPTY_BALANCE);
       setWithdrawals([]);
       return;
     }
@@ -519,11 +530,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       supabase.from("organizer_balances").select("*").eq("organizer_id", organizerId).maybeSingle(),
       supabase.from("withdrawals").select("*").eq("organizer_id", organizerId).order("requested_at", { ascending: false }),
     ]);
+    const net = Number(bal?.net_paid_cents ?? 0);
+    const withdrawn = Number(bal?.withdrawn_cents ?? 0);
+    const pendingWd = Number(bal?.pending_withdrawal_cents ?? 0);
+    const available = Number(bal?.balance_available_cents ?? 0);
     setBalance({
-      netPaidCents: Number(bal?.net_paid_cents ?? 0),
-      withdrawnCents: Number(bal?.withdrawn_cents ?? 0),
-      pendingCents: Number(bal?.pending_withdrawal_cents ?? 0),
-      availableCents: Number(bal?.balance_available_cents ?? 0),
+      netPaidCents: net,
+      withdrawnCents: withdrawn,
+      pendingCents: pendingWd,
+      availableCents: available,
+      releasePendingCents: Math.max(0, net - (available + withdrawn + pendingWd)),
+      refundPendingCents: Number(bal?.refund_pending_cents ?? 0),
     });
     setWithdrawals(
       (wds ?? []).map((w: any) => ({
@@ -543,6 +560,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (eventIds.length === 0) {
       setAnalyticsOrders([]);
       setAnalyticsTickets([]);
+      setAnalyticsViews([]);
       return;
     }
     async function pageAll(table: string, columns: string): Promise<any[]> {
@@ -568,6 +586,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     ]);
     setAnalyticsOrders(orderRows as OrderRow[]);
     setAnalyticsTickets(ticketRows as TicketRow[]);
+    const { data: viewRows } = await supabase.rpc("event_view_stats", { p_event_ids: eventIds, p_days: 90 });
+    setAnalyticsViews(((viewRows as any[]) ?? []).map((r) => ({ event_id: r.event_id, day: r.day, views: Number(r.views) })));
   }, []);
 
   // --- Bandeja de notificaciones (las crean disparadores en la base de datos) ---
@@ -724,9 +744,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setNotifications([]);
         setAnalyticsOrders([]);
         setAnalyticsTickets([]);
+        setAnalyticsViews([]);
         setStaff([]);
         setStaffAssignments([]);
-        setBalance({ netPaidCents: 0, withdrawnCents: 0, pendingCents: 0, availableCents: 0 });
+        setBalance(EMPTY_BALANCE);
         setWithdrawals([]);
       }
     });
@@ -1245,6 +1266,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     return { ok: true, recipients: Number(data ?? 0) };
   }, []);
 
+  const recordEventView = useCallback(async (eventId: string) => {
+    await supabase.rpc("record_event_view", { p_event_id: eventId });
+  }, []);
+
+  const refundOrder = useCallback(
+    async (orderId: string, reason: string): Promise<Result> => {
+      const { error } = await supabase.rpc("request_order_refund", { p_order_id: orderId, p_reason: reason });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo reembolsar esta compra.") };
+      await Promise.all([fetchAnalytics(myEventIds), fetchBalance(myOrganizerId), fetchEvents(myOrganizerId)]);
+      return { ok: true };
+    },
+    [myEventIds, myOrganizerId, fetchAnalytics, fetchBalance, fetchEvents]
+  );
+
   const markNotificationsRead = useCallback(
     async (ids?: string[]) => {
       if (!userId) return;
@@ -1472,6 +1507,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       withdrawals,
       analyticsOrders,
       analyticsTickets,
+      analyticsViews,
+      recordEventView,
+      refundOrder,
       notifications,
       unreadCount,
       markNotificationsRead,
@@ -1534,6 +1572,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       withdrawals,
       analyticsOrders,
       analyticsTickets,
+      analyticsViews,
+      recordEventView,
+      refundOrder,
       notifications,
       unreadCount,
       markNotificationsRead,

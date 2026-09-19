@@ -68,3 +68,16 @@ body {
   background: var(--border-strong);
   border-radius: 999px;
 }
+
+@media print {
+  aside,
+  nav {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  body {
+    background: #fff !important;
+  }
+}

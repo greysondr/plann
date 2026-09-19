@@ -1,10 +1,11 @@
 import { requireOrganizer } from "@/lib/org/session";
-import { loadBalance, loadEvents, loadOrders, loadWithdrawals } from "@/lib/org/data";
-import { currencySplit, monthlySummary } from "@/lib/org/analytics";
+import { loadBalance, loadEvents, loadOrders, loadWithdrawals, pendingRelease } from "@/lib/org/data";
+import { currencySplit, eventSettlements, monthlySummary } from "@/lib/org/analytics";
 import { shortDate, usd } from "@/lib/format";
 import { Badge, Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, Th, Tr } from "@/components/ui";
 import { WithdrawForm } from "@/components/org/SimpleForms";
 import { Donut } from "@/components/org/charts";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -16,18 +17,24 @@ export default async function FinancesPage() {
   const [balance, withdrawals, orders] = await Promise.all([loadBalance(organizer.id), loadWithdrawals(organizer.id), loadOrders(events.map((e) => e.id))]);
   const months = monthlySummary(orders);
   const split = currencySplit(orders);
-  const refunds = orders.filter((o) => o.status === "refund_pending");
-  const refundTotal = refunds.reduce((s, o) => s + o.organizer_net_cents, 0);
+  const settlements = eventSettlements(orders);
+  const PLAN_NAME: Record<string, string> = { basico: "Básico", pro: "Pro", business: "Business" };
+  const RELEASE: Record<string, string> = {
+    basico: "3 días después de que termina cada evento",
+    pro: "3 días después de cada venta",
+    business: "24 horas después de cada venta",
+  };
 
   return (
     <div className="space-y-6">
       <PageHeader title="Finanzas" subtitle="Tu saldo, tus retiros y cuánto te queda de cada venta." />
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
         <StatCard label="Disponible para retirar" value={usd(balance.balance_available_cents)} />
+        <StatCard label="Por liberar" value={usd(pendingRelease(balance))} hint={`Plan ${PLAN_NAME[organizer.plan]}: ${RELEASE[organizer.plan]}`} />
         <StatCard label="En proceso de pago" value={usd(balance.pending_withdrawal_cents)} hint="retiros solicitados" />
         <StatCard label="Ya retirado" value={usd(balance.withdrawn_cents)} />
-        <StatCard label="Ingresos netos históricos" value={usd(balance.net_paid_cents)} hint={refundTotal > 0 ? `${usd(refundTotal)} por reembolsos ya descontados` : undefined} />
+        <StatCard label="Por reembolsar" value={usd(balance.refund_pending_cents)} hint="ya descontado de tu saldo" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
@@ -53,6 +60,43 @@ export default async function FinancesPage() {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader title="Liquidación por evento" subtitle="Bruto a precio de lista, descuentos, comisión de Plann, reembolsos y lo que te queda" />
+        {settlements.size === 0 ? (
+          <EmptyState title="Sin ventas todavía" />
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <Th>Evento</Th>
+                <Th className="text-right">Entradas</Th>
+                <Th className="text-right">Bruto</Th>
+                <Th className="text-right">Cupones</Th>
+                <Th className="text-right">Comisión</Th>
+                <Th className="text-right">Reembolsos</Th>
+                <Th className="text-right">Neto</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {events.filter((e) => settlements.has(e.id)).map((e) => {
+                const s = settlements.get(e.id)!;
+                return (
+                  <Tr key={e.id}>
+                    <Td className="max-w-[240px] truncate font-semibold text-foreground">{e.title}</Td>
+                    <Td className="text-right">{s.tickets}</Td>
+                    <Td className="text-right">{usd(s.grossCents)}</Td>
+                    <Td className="text-right">{s.discountCents ? `−${usd(s.discountCents)}` : "—"}</Td>
+                    <Td className="text-right">{usd(s.commissionCents)}</Td>
+                    <Td className="text-right">{s.refundedCents ? `${usd(s.refundedCents)} (${s.refundedOrders})` : "—"}</Td>
+                    <Td className="text-right font-bold">{usd(s.netCents)}</Td>
+                  </Tr>
+                );
+              })}
+            </tbody>
+          </Table>
+        )}
+      </Card>
 
       <Card>
         <CardHeader title="Resumen por mes" subtitle="Ventas pagadas, comisión de Plann y lo que te queda" />
@@ -97,6 +141,7 @@ export default async function FinancesPage() {
                 <Th>Cuenta</Th>
                 <Th className="text-right">Monto</Th>
                 <Th>Estado</Th>
+                <Th className="text-right">Comprobante</Th>
               </tr>
             </thead>
             <tbody>
@@ -110,6 +155,11 @@ export default async function FinancesPage() {
                     <Badge tone={w.status === "pagado" ? "success" : w.status === "rechazado" ? "danger" : "warning"}>
                       {w.status === "pagado" ? "Pagado" : w.status === "rechazado" ? "Rechazado" : "En proceso"}
                     </Badge>
+                  </Td>
+                  <Td className="text-right">
+                    <Link href={`/organizador/finanzas/retiro/${w.id}`} className="text-[12.5px] font-bold text-pink">
+                      Ver
+                    </Link>
                   </Td>
                 </Tr>
               ))}

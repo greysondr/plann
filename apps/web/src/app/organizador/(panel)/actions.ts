@@ -19,6 +19,9 @@ const DB_ERRORS: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   not_authorized: "No tienes permiso para hacer esto.",
   sold_out: "No quedan entradas suficientes de ese tipo.",
+  order_not_refundable: "Esta compra ya no se puede reembolsar.",
+  tickets_used: "Alguien ya entró con estas entradas: no se puede reembolsar.",
+  comp_no_refund: "Las cortesías no se reembolsan.",
   ticket_sales_window_valid: "La fecha de cierre debe ser posterior a la de apertura.",
   message_length: "El mensaje debe tener entre 5 y 500 caracteres.",
   announcement_limit: "Ya enviaste 3 mensajes a este evento hoy. Intenta mañana.",
@@ -493,4 +496,14 @@ export async function sendAnnouncementAction(eventId: string, _prev: FormState, 
   revalidatePath(`/organizador/eventos/${eventId}`);
   const n = Number(data ?? 0);
   return { ok: `Mensaje enviado a ${n} ${n === 1 ? "persona" : "personas"}.` };
+}
+
+export async function refundOrderAction(orderId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const reason = String(formData.get("reason") ?? "").trim();
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("request_order_refund", { p_order_id: orderId, p_reason: reason });
+  if (error) return { error: dbError(error.message, "No pudimos reembolsar esta compra.") };
+  revalidatePath("/organizador", "layout");
+  return { ok: "Compra anulada. Sale de tu saldo y queda por devolver al comprador." };
 }
