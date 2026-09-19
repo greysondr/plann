@@ -66,7 +66,7 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   organizer_not_verified: "Tu cuenta de organizador todavía no está verificada.",
   quantity_below_sold: "El cupo no puede ser menor a lo que ya se vendió.",
   event_closed: "Este evento ya está cerrado y no se puede modificar.",
-  user_not_found: "No hay ninguna cuenta de Plann con ese correo. Pídele que se registre primero.",
+  user_not_found: "No hay ninguna cuenta de Plann con ese correo.",
   staff_limit_reached: "Llegaste al máximo de personas de tu plan (Básico 1, Pro 5, Business 50).",
   invalid_role: "Elige un rol válido.",
   support_text_short: "Cuéntanos un poco más: el asunto y el mensaje son muy cortos.",
@@ -320,7 +320,7 @@ interface AppStoreValue {
   createCoupon: (input: NewCouponInput) => Promise<Result>;
   setCouponActive: (id: string, active: boolean) => Promise<Result>;
   deleteCoupon: (id: string) => Promise<Result>;
-  issueComp: (ticketTypeId: string, email: string, quantity: number, note?: string) => Promise<Result>;
+  issueComp: (ticketTypeId: string, email: string, quantity: number, note?: string) => Promise<Result & { invited?: boolean }>;
   sendAnnouncement: (eventId: string, message: string) => Promise<Result & { recipients?: number }>;
 
   rateApplied: number;
@@ -1443,8 +1443,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const issueComp = useCallback(
-    async (ticketTypeId: string, email: string, quantity: number, note?: string): Promise<Result> => {
-      const { error } = await supabase.rpc("issue_comp_tickets", {
+    async (ticketTypeId: string, email: string, quantity: number, note?: string): Promise<Result & { invited?: boolean }> => {
+      const { data, error } = await supabase.rpc("issue_comp_tickets", {
         p_ticket_type_id: ticketTypeId,
         p_email: email.trim(),
         p_quantity: quantity,
@@ -1452,9 +1452,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       });
       if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo enviar la cortesía.") };
       await fetchEvents(myOrganizerId);
-      return { ok: true };
+      // Sin cuenta: la orden queda a nombre de quien invita y se entrega al registrarse.
+      return { ok: true, invited: (data as any)?.user_id === userId };
     },
-    [myOrganizerId, fetchEvents]
+    [myOrganizerId, fetchEvents, userId]
   );
 
   const sendAnnouncement = useCallback(async (eventId: string, message: string) => {

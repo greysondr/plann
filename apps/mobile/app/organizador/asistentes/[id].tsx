@@ -76,7 +76,12 @@ export default function AsistentesScreen() {
     const result = await issueComp(selectedType.id, guestEmail, guestQty, guestNote);
     setWorking(false);
     if (result.ok) {
-      setFeedback({ text: `Listo. ${guestEmail.trim()} ya tiene ${guestQty === 1 ? "su entrada" : "sus entradas"} en la app.`, error: false });
+      setFeedback({
+        text: result.invited
+          ? `${guestEmail.trim()} todavía no tiene cuenta en Plann. Guardamos ${guestQty === 1 ? "su entrada" : "sus entradas"}: le aparecerán solas cuando se registre con ese correo.`
+          : `Listo. ${guestEmail.trim()} ya tiene ${guestQty === 1 ? "su entrada" : "sus entradas"} en la app.`,
+        error: false,
+      });
       setGuestEmail("");
       setGuestNote("");
       load();

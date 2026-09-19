@@ -30,3 +30,6 @@ Migración: `20260920000000_retention_features.sql`.
 - Push no probado en dispositivo físico; las pantallas nuevas de la app compilan y sus RPC se probaron por SQL, pero no se recorrieron en el simulador.
 - Reembolsar una compra con regalo de cumpleaños: el saldo del organizador se revierte completo, pero el comprador pagó $5 menos; hay que definir a quién corresponde la diferencia.
 - Un reembolso de la orden original anula también una entrada ya regalada.
+
+## Cortesías a personas sin cuenta
+`issue_comp_tickets` ya no falla con `user_not_found`: si el correo no tiene cuenta, la cortesía se emite a nombre de quien invita, las entradas quedan `transferred` y se crea un regalo pendiente. Al registrarse esa persona con ese correo, `claim_pending_gifts` se las entrega (una sola notificación: «<Organizador> te invitó a un evento») y avisa a quien invitó. Migración `20260920020000_comp_invite_without_account.sql`.

@@ -15,8 +15,9 @@ const DB_ERRORS: Record<string, string> = {
   quantity_below_sold: "El cupo no puede ser menor a lo que ya se vendió o está reservado.",
   event_closed: "Este evento ya está cerrado y no se puede modificar.",
   reason_required: "Cuéntales a tus compradores por qué se cancela (mínimo 5 letras).",
-  user_not_found: "No hay ninguna cuenta de Plann con ese correo. Pídele que se registre primero.",
+  user_not_found: "No hay ninguna cuenta de Plann con ese correo.",
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
+  email_invalid: "Ese correo no parece válido.",
   not_authorized: "No tienes permiso para hacer esto.",
   sold_out: "No quedan entradas suficientes de ese tipo.",
   staff_limit_reached: "Llegaste al máximo de personas de tu plan (Básico 1, Pro 5, Business 50).",
@@ -499,9 +500,13 @@ export async function issueCompAction(eventId: string, _prev: FormState, formDat
   if (!ticketTypeId) return { error: "Elige el tipo de entrada." };
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 6) return { error: "Puedes regalar de 1 a 6 entradas." };
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("issue_comp_tickets", { p_ticket_type_id: ticketTypeId, p_email: email, p_quantity: quantity, p_note: note || null });
+  const { data, error } = await supabase.rpc("issue_comp_tickets", { p_ticket_type_id: ticketTypeId, p_email: email, p_quantity: quantity, p_note: note || null });
   if (error) return { error: dbError(error.message, "No pudimos enviar la cortesía.") };
   revalidatePath(`/organizador/eventos/${eventId}`);
+  const { user } = await requireOrganizer();
+  if ((data as { user_id?: string } | null)?.user_id === user.id) {
+    return { ok: `${email} todavía no tiene cuenta en Plann. Guardamos ${quantity === 1 ? "su entrada" : "sus entradas"}: le aparecerán solas cuando se registre con ese correo.` };
+  }
   return { ok: `Listo. ${email} ya tiene ${quantity === 1 ? "su entrada" : "sus entradas"} en la app.` };
 }
 
