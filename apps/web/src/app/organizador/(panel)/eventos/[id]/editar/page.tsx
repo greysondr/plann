@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadCatalog, loadEvents, loadOrders } from "@/lib/org/data";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
 import { EventForm } from "@/components/org/EventForm";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function EditEventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { organizer } = await requireOrganizer();
+  const { organizer, role } = await requireRole(can.manage);
   const events = await loadEvents(organizer.id);
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
@@ -77,7 +77,7 @@ export default async function EditEventPage({ params }: { params: Promise<{ id: 
       </Card>
       <TicketTypesManager eventId={event.id} types={event.ticket_types} />
       <SalesControl eventId={event.id} paused={event.sales_paused} />
-      <CancelEvent eventId={event.id} paidOrders={paidOrders} />
+      {role === "owner" && <CancelEvent eventId={event.id} paidOrders={paidOrders} />}
     </div>
   );
 }

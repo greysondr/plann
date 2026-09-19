@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireOrganizer } from "@/lib/org/session";
 import { eventNames, loadBalance, loadEvents, loadFollowers, loadOrders, loadReviews, loadTickets, loadViews, pendingRelease, ticketTypeNames } from "@/lib/org/data";
 import {
   attendance,
@@ -25,7 +25,8 @@ export const dynamic = "force-dynamic";
 const DAY = 24 * 3600 * 1000;
 
 export default async function OrganizerDashboard({ searchParams }: { searchParams: Promise<{ rango?: string }> }) {
-  const { organizer } = await requireOrganizer();
+  const { organizer, role } = await requireOrganizer();
+  const showMoney = can.money(role);
   const { rango } = await searchParams;
   const range = [7, 30, 90].includes(Number(rango)) ? Number(rango) : 30;
 
@@ -83,7 +84,7 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard label="Ingresos netos" value={usd(cur.netCents)} delta={netDelta?.text} deltaTone={netDelta?.tone} hint={`vs ${usd(prev.netCents)}`} />
         <StatCard label="Entradas vendidas" value={String(cur.tickets)} delta={ticketsDelta?.text} deltaTone={ticketsDelta?.tone} hint={`${cur.orders} pedidos`} />
-        <StatCard label="Saldo disponible" value={usd(balance.balance_available_cents)} hint={pendingRelease(balance) > 0 ? `+ ${usd(pendingRelease(balance))} por liberar` : balance.pending_withdrawal_cents > 0 ? `${usd(balance.pending_withdrawal_cents)} en proceso` : "listo para retirar"} />
+        {showMoney && <StatCard label="Saldo disponible" value={usd(balance.balance_available_cents)} hint={pendingRelease(balance) > 0 ? `+ ${usd(pendingRelease(balance))} por liberar` : balance.pending_withdrawal_cents > 0 ? `${usd(balance.pending_withdrawal_cents)} en proceso` : "listo para retirar"} />}
         <StatCard label="Pedido promedio" value={usd(avgOrder)} hint="antes de comisión" />
       </div>
 

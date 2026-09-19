@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireOrganizer } from "@/lib/org/session";
 import { loadEvents, loadOrders } from "@/lib/org/data";
 import { sumBy } from "@/lib/org/analytics";
 import { longDateTime, usd } from "@/lib/format";
@@ -18,7 +18,8 @@ const TABS = [
 ];
 
 export default async function EventsPage({ searchParams }: { searchParams: Promise<{ ver?: string }> }) {
-  const { organizer } = await requireOrganizer();
+  const { organizer, role } = await requireOrganizer();
+  const manage = can.manage(role);
   const { ver } = await searchParams;
   const tab = TABS.some((t) => t.id === ver) ? ver! : "proximos";
 
@@ -39,9 +40,11 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
         title="Eventos"
         subtitle="Publica, edita y sigue las ventas de cada evento."
         action={
-          <Link href="/organizador/eventos/nuevo">
-            <Button type="button">Nuevo evento</Button>
-          </Link>
+          manage ? (
+            <Link href="/organizador/eventos/nuevo">
+              <Button type="button">Nuevo evento</Button>
+            </Link>
+          ) : undefined
         }
       />
 
@@ -94,16 +97,16 @@ export default async function EventsPage({ searchParams }: { searchParams: Promi
                     <Link href={`/organizador/eventos/${e.id}`} className="text-foreground-2 hover:text-pink">
                       Analíticas
                     </Link>
-                    {e.status !== "cancelled" && e.status !== "finished" && (
+                    {manage && e.status !== "cancelled" && e.status !== "finished" && (
                       <Link href={`/organizador/eventos/${e.id}/editar`} className="text-foreground-2 hover:text-pink">
                         Editar
                       </Link>
                     )}
-                    <form action={duplicateEventAction.bind(null, e.id)} className="ml-auto">
+                    {manage && <form action={duplicateEventAction.bind(null, e.id)} className="ml-auto">
                       <button type="submit" className="text-foreground-3 hover:text-pink">
                         Duplicar
                       </button>
-                    </form>
+                    </form>}
                   </div>
                 </div>
               </Card>

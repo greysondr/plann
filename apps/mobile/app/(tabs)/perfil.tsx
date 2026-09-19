@@ -112,7 +112,7 @@ export default function PerfilScreen() {
           <Divider />
           <Row label="Notificaciones" value={unreadCount > 0 ? `${unreadCount} ${unreadCount === 1 ? "nueva" : "nuevas"}` : undefined} onPress={() => router.push("/notificaciones")} />
           <Divider />
-          <Row label="Ayuda y soporte" onPress={soon("Ayuda y soporte")} />
+          <Row label="Ayuda y soporte" onPress={() => router.push("/soporte")} />
         </GlassCard>
       </View>
 

@@ -1,4 +1,4 @@
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadEvents, loadOrders } from "@/lib/org/data";
 import { dayKey, eventSettlements, isPaid } from "@/lib/org/analytics";
 import { longDateTime, usd } from "@/lib/format";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
-  const { organizer } = await requireOrganizer();
+  const { organizer } = await requireRole(can.money);
   const { mes } = await searchParams;
   const events = await loadEvents(organizer.id);
   const orders = await loadOrders(events.map((e) => e.id));

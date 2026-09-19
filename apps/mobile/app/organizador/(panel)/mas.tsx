@@ -28,9 +28,12 @@ const Divider = () => <View style={styles.divider} />;
 export default function MasScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount, coupons, ratingSummary, followerCount } = useAppStore();
+  const { balance, staff, events, myOrganizerId, organizerProfile, signOut, unreadCount, orgRole, coupons, ratingSummary, followerCount } = useAppStore();
   if (!allowed) return null;
 
+  const canManage = orgRole === "owner" || orgRole === "editor";
+  const canMoney = orgRole === "owner" || orgRole === "finance";
+  const isOwner = orgRole === "owner";
   const active = events.filter((e) => e.organizerId === myOrganizerId && ["published", "sold_out", "live"].includes(e.status ?? "")).length;
 
   return (
@@ -41,24 +44,24 @@ export default function MasScreen() {
           <Text style={styles.title}>Más herramientas</Text>
         </View>
 
-        <View style={styles.section}>
+        {canManage && <View style={styles.section}>
           <PrimaryButton label="Publicar un evento" onPress={() => router.push("/organizador/crear")} />
-        </View>
+        </View>}
 
         <View style={styles.section}>
           <Text style={styles.groupTitle}>Día del evento</Text>
           <GlassCard level="card">
             <Row label="Escanear entradas" hint="Valida los QR en la puerta" onPress={() => router.push("/organizador/escanear")} />
-            <Divider />
-            <Row label="Equipo de puerta" hint={staff.length === 0 ? "Invita a quien valida por ti" : `${staff.length} ${staff.length === 1 ? "persona" : "personas"}`} onPress={() => router.push("/organizador/equipo")} />
+            {isOwner && <Divider />}
+            {isOwner && <Row label="Equipo y roles" hint={staff.length === 0 ? "Invita a quien valida por ti" : `${staff.length} ${staff.length === 1 ? "persona" : "personas"}`} onPress={() => router.push("/organizador/equipo")} />}
           </GlassCard>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.groupTitle}>Tu negocio</Text>
           <GlassCard level="card">
-            <Row label="Retiros y finanzas" hint={`${formatUsd(balance.availableCents)} disponibles`} onPress={() => router.push("/organizador/retiros")} />
-            <Divider />
+            {canMoney && <Row label="Retiros y finanzas" hint={`${formatUsd(balance.availableCents)} disponibles`} onPress={() => router.push("/organizador/retiros")} />}
+            {canMoney && <Divider />}
             <Row label="Mis eventos" hint={`${active} activos`} onPress={() => router.push("/organizador/eventos")} />
             <Divider />
             <Row label="Ventas y pedidos" hint="Filtra y consulta cada pedido" onPress={() => router.push("/organizador/ventas")} />
@@ -67,11 +70,11 @@ export default function MasScreen() {
             <Divider />
             <Row label="Comparar eventos" hint="Cuál vende más y cuál convierte mejor" onPress={() => router.push("/organizador/comparar")} />
             <Divider />
-            <Row label="Reportes" hint="Resumen mensual para tu contabilidad" onPress={() => router.push("/organizador/reportes")} />
-            <Divider />
-            <Row label="Cupones" hint={coupons.length === 0 ? "Descuentos para tus compradores" : `${coupons.filter((c) => c.active).length} activos`} onPress={() => router.push("/organizador/cupones")} />
-            <Divider />
-            <Row label="Mi negocio" hint={organizerProfile?.name ?? "Perfil, logo y cuenta de cobro"} onPress={() => router.push("/organizador/negocio")} />
+            {canMoney && <Row label="Reportes" hint="Resumen mensual para tu contabilidad" onPress={() => router.push("/organizador/reportes")} />}
+            {canMoney && <Divider />}
+            {canManage && <Row label="Cupones" hint={coupons.length === 0 ? "Descuentos para tus compradores" : `${coupons.filter((c) => c.active).length} activos`} onPress={() => router.push("/organizador/cupones")} />}
+            {canManage && <Divider />}
+            {isOwner && <Row label="Mi negocio" hint={organizerProfile?.name ?? "Perfil, logo y cuenta de cobro"} onPress={() => router.push("/organizador/negocio")} />}
           </GlassCard>
         </View>
 
@@ -79,6 +82,8 @@ export default function MasScreen() {
           <Text style={styles.groupTitle}>Cuenta</Text>
           <GlassCard level="card">
             <Row label="Notificaciones" hint={unreadCount > 0 ? `${unreadCount} sin leer` : "Ventas, cupos, retiros y más"} onPress={() => router.push("/notificaciones")} />
+            <Divider />
+            <Row label="Ayuda y soporte" hint="Preguntas frecuentes y escribir a Plann" onPress={() => router.push("/soporte")} />
             <Divider />
             <Row label="Cambiar a modo comprador" hint="Explora y compra entradas" onPress={() => {
                 setLastMode("buyer");

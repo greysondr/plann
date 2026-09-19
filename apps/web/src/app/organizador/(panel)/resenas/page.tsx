@@ -1,4 +1,4 @@
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadEvents, loadReviews } from "@/lib/org/data";
 import { shortDate } from "@/lib/format";
 import { Card, CardHeader, EmptyState, PageHeader, StatCard } from "@/components/ui";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
 
 export default async function ReviewsPage() {
-  const { organizer } = await requireOrganizer();
+  const { organizer } = await requireRole(can.manage);
   const [reviews, events] = await Promise.all([loadReviews(organizer.id), loadEvents(organizer.id)]);
   const title = new Map(events.map((e) => [e.id, e.title]));
   const avg = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;

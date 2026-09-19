@@ -1,7 +1,7 @@
 import Link from "next/link";
 import QRCode from "qrcode";
 import { notFound } from "next/navigation";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadEvents } from "@/lib/org/data";
 import { SITE_URL } from "@/lib/supabase/public";
 import { longDateTime, usd } from "@/lib/format";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PosterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { organizer } = await requireOrganizer();
+  const { organizer } = await requireRole(can.manage);
   const event = (await loadEvents(organizer.id)).find((e) => e.id === id);
   if (!event) notFound();
   const url = `${SITE_URL}/e/${event.slug}?src=afiche`;

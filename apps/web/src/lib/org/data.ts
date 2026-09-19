@@ -157,14 +157,28 @@ export interface StaffRow {
   id: string;
   email: string;
   full_name: string | null;
+  role: "door" | "editor" | "finance";
   created_at: string;
+}
+
+export interface StaffInviteRow {
+  id: string;
+  email: string;
+  role: "door" | "editor" | "finance";
+  created_at: string;
+}
+
+export async function loadStaffInvites(organizerId: string): Promise<StaffInviteRow[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.from("staff_invites").select("id, email, role, created_at").eq("organizer_id", organizerId).order("created_at");
+  return (data ?? []) as StaffInviteRow[];
 }
 
 export async function loadStaff(organizerId: string): Promise<StaffRow[]> {
   const supabase = await supabaseServer();
   const { data } = await supabase
     .from("organizer_staff")
-    .select("id, email, full_name, created_at")
+    .select("id, email, full_name, role, created_at")
     .eq("organizer_id", organizerId)
     .order("created_at");
   return (data ?? []) as StaffRow[];
@@ -258,4 +272,57 @@ export async function loadLinkStats(eventId: string): Promise<{ src: string; vis
   const supabase = await supabaseServer();
   const { data } = await supabase.rpc("event_link_stats", { p_event_id: eventId });
   return ((data ?? []) as { src: string; visits: number }[]).map((r) => ({ src: r.src, visits: Number(r.visits) }));
+}
+
+export interface NotificationRow {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  data: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export async function loadNotifications(limit = 60): Promise<NotificationRow[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.from("notifications").select("id, type, title, body, data, read_at, created_at").order("created_at", { ascending: false }).limit(limit);
+  return (data ?? []) as NotificationRow[];
+}
+
+export async function countUnread(): Promise<number> {
+  const supabase = await supabaseServer();
+  const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null);
+  return count ?? 0;
+}
+
+export interface SupportTicketRow {
+  id: string;
+  category: string;
+  subject: string;
+  status: "abierto" | "en_proceso" | "resuelto" | "cerrado";
+  priority: "normal" | "alta";
+  created_at: string;
+  last_message_at: string;
+}
+
+export interface TicketMessageRow {
+  id: string;
+  author_role: "user" | "staff";
+  body: string;
+  created_at: string;
+}
+
+export async function loadSupportTickets(): Promise<SupportTicketRow[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.from("support_tickets").select("id, category, subject, status, priority, created_at, last_message_at").order("last_message_at", { ascending: false });
+  return (data ?? []) as SupportTicketRow[];
+}
+
+export async function loadSupportTicket(id: string): Promise<{ ticket: SupportTicketRow; messages: TicketMessageRow[] } | null> {
+  const supabase = await supabaseServer();
+  const { data: ticket } = await supabase.from("support_tickets").select("id, category, subject, status, priority, created_at, last_message_at").eq("id", id).maybeSingle();
+  if (!ticket) return null;
+  const { data: messages } = await supabase.from("support_messages").select("id, author_role, body, created_at").eq("ticket_id", id).order("created_at");
+  return { ticket: ticket as SupportTicketRow, messages: (messages ?? []) as TicketMessageRow[] };
 }

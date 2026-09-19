@@ -134,6 +134,8 @@ export default function RootLayout() {
                 <Stack.Screen name="organizador/editar/[id]" />
                 <Stack.Screen name="organizador/asistentes/[id]" />
                 <Stack.Screen name="notificaciones" />
+                <Stack.Screen name="soporte/index" />
+                <Stack.Screen name="soporte/[id]" />
                 <Stack.Screen name="perfil/nivel" />
                 <Stack.Screen name="perfil/historial" />
               </Stack>

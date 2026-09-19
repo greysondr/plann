@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addStaffAction, removeStaffAction, requestWithdrawalAction, updateProfileAction } from "@/app/organizador/(panel)/actions";
+import { addStaffAction, cancelStaffInviteAction, removeStaffAction, requestWithdrawalAction, updateProfileAction } from "@/app/organizador/(panel)/actions";
 import type { FormState } from "@/app/organizador/actions";
 import { Button } from "@/components/ui";
 import { Message } from "@/components/org/Forms";
@@ -59,11 +59,27 @@ export function WithdrawForm({ available, method, account }: { available: number
   );
 }
 
+const ROLES = [
+  { id: "door", label: "Puerta", hint: "Solo valida entradas en la app" },
+  { id: "editor", label: "Editor", hint: "Gestiona eventos, entradas, cupones y mensajes. No ve retiros ni cuentas de cobro" },
+  { id: "finance", label: "Finanzas", hint: "Solo lectura: ventas, saldo, retiros y reportes" },
+];
+
 export function StaffForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(addStaffAction, {});
+  const [role, setRole] = useState("door");
   return (
     <form action={action} className="space-y-3">
-      <input name="email" type="email" required placeholder="Correo con el que se registró en Plann" className={inputClass} />
+      <input name="email" type="email" required placeholder="Correo de la persona" className={inputClass} />
+      <div className="flex flex-wrap gap-2">
+        {ROLES.map((r) => (
+          <button key={r.id} type="button" onClick={() => setRole(r.id)} className={`rounded-full border px-4 py-1.5 text-[13px] font-bold ${role === r.id ? "border-pink bg-pink text-white" : "border-border-strong text-foreground-2"}`}>
+            {r.label}
+          </button>
+        ))}
+      </div>
+      <input type="hidden" name="role" value={role} />
+      <p className="text-[12.5px] text-foreground-3">{ROLES.find((r) => r.id === role)?.hint}</p>
       <Message state={state} />
       <Button type="submit" disabled={pending}>
         {pending ? "Agregando..." : "Agregar al equipo"}
@@ -127,6 +143,16 @@ export function ProfileForm({
       <Button type="submit" disabled={pending}>
         {pending ? "Guardando..." : "Guardar perfil"}
       </Button>
+    </form>
+  );
+}
+
+export function CancelInvite({ id }: { id: string }) {
+  return (
+    <form action={cancelStaffInviteAction.bind(null, id)}>
+      <button type="submit" className="text-[12.5px] font-bold text-foreground-3 hover:text-danger">
+        Cancelar invitación
+      </button>
     </form>
   );
 }

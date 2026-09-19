@@ -71,7 +71,10 @@ function QuickAction({ label, onPress, primary }: { label: string; onPress: () =
 export default function OrganizadorScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
-  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets, analyticsViews, followerCount, ratingSummary } = useAppStore();
+  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets, analyticsViews, followerCount, ratingSummary, orgRole } = useAppStore();
+  const canManage = orgRole === "owner" || orgRole === "editor";
+  const canMoney = orgRole === "owner" || orgRole === "finance";
+  const isOwner = orgRole === "owner";
   const [range, setRange] = useState(30);
 
   const myEvents = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
@@ -118,13 +121,13 @@ export default function OrganizadorScreen() {
       </View>
 
       <View style={[styles.section, styles.quickRow]}>
-        <QuickAction label="Publicar" onPress={() => router.push("/organizador/crear")} primary />
-        <QuickAction label="Retirar" onPress={() => router.push("/organizador/retiros")} />
-        <QuickAction label="Equipo" onPress={() => router.push("/organizador/equipo")} />
-        <QuickAction label="Mi negocio" onPress={() => router.push("/organizador/negocio")} />
+        {canManage && <QuickAction label="Publicar" onPress={() => router.push("/organizador/crear")} primary />}
+        {canMoney && <QuickAction label="Retirar" onPress={() => router.push("/organizador/retiros")} />}
+        {isOwner && <QuickAction label="Equipo" onPress={() => router.push("/organizador/equipo")} />}
+        {isOwner && <QuickAction label="Mi negocio" onPress={() => router.push("/organizador/negocio")} />}
       </View>
 
-      <View style={styles.section}>
+      {canMoney && <View style={styles.section}>
         <GlassCard level="card">
           <View style={styles.balanceRow}>
             <View>
@@ -138,7 +141,7 @@ export default function OrganizadorScreen() {
             </Pressable>
           </View>
         </GlassCard>
-      </View>
+      </View>}
 
       {stats.pending > 0 && (
         <View style={styles.section}>

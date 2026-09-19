@@ -62,6 +62,11 @@ const DB_ERROR_MESSAGES: Record<string, string> = {
   quantity_below_sold: "El cupo no puede ser menor a lo que ya se vendió.",
   event_closed: "Este evento ya está cerrado y no se puede modificar.",
   user_not_found: "No hay ninguna cuenta de Plann con ese correo. Pídele que se registre primero.",
+  staff_limit_reached: "Llegaste al máximo de personas de tu plan (Básico 1, Pro 5, Business 50).",
+  invalid_role: "Elige un rol válido.",
+  support_text_short: "Cuéntanos un poco más: el asunto y el mensaje son muy cortos.",
+  support_too_many_open: "Ya tienes 5 consultas abiertas. Espera a que respondamos alguna.",
+  ticket_closed: "Esta consulta está cerrada. Abre una nueva si sigues con el problema.",
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   reason_required: "Cuéntale a tus compradores por qué se cancela (mínimo 5 letras).",
   sales_paused: "El organizador pausó las ventas de este evento.",
@@ -199,10 +204,36 @@ export interface Review {
   createdAt: string;
 }
 
+export type OrgRole = "owner" | "editor" | "finance";
+export type StaffRole = "door" | "editor" | "finance";
+
 export interface StaffMember {
   id: string;
   email: string;
   name: string;
+  role: StaffRole;
+}
+
+export interface StaffInvite {
+  id: string;
+  email: string;
+  role: StaffRole;
+}
+
+export interface SupportTicket {
+  id: string;
+  category: string;
+  subject: string;
+  status: "abierto" | "en_proceso" | "resuelto" | "cerrado";
+  priority: "normal" | "alta";
+  lastMessageAt: string;
+}
+
+export interface SupportMessage {
+  id: string;
+  fromStaff: boolean;
+  body: string;
+  createdAt: string;
 }
 
 export interface StaffAssignment {
@@ -263,8 +294,15 @@ interface AppStoreValue {
   notifications: AppNotification[];
   unreadCount: number;
   markNotificationsRead: (ids?: string[]) => Promise<void>;
+  orgRole: OrgRole | null;
   staff: StaffMember[];
+  staffInvites: StaffInvite[];
   staffAssignments: StaffAssignment[];
+  supportTickets: SupportTicket[];
+  fetchSupportMessages: (ticketId: string) => Promise<SupportMessage[]>;
+  createSupportTicket: (category: string, subject: string, body: string) => Promise<Result & { ticketId?: string }>;
+  replySupport: (ticketId: string, body: string) => Promise<Result>;
+  cancelStaffInvite: (inviteId: string) => Promise<Result>;
   followedOrganizers: string[];
   toggleFollow: (organizerId: string) => Promise<void>;
   followerCount: number;
@@ -304,7 +342,7 @@ interface AppStoreValue {
   updateTicketType: (ticketTypeId: string, name: string, priceCents: number, quantity: number, window?: { salesStart: string | null; salesEnd: string | null }) => Promise<Result>;
   addTicketType: (eventId: string, ticket: NewTicketInput) => Promise<Result>;
   deleteTicketType: (ticketTypeId: string) => Promise<Result>;
-  addStaff: (email: string) => Promise<Result>;
+  addStaff: (email: string, role: StaffRole) => Promise<Result & { invited?: boolean }>;
   removeStaff: (staffId: string) => Promise<Result>;
   fetchAttendees: (eventId: string) => Promise<Attendee[]>;
   fetchCheckinCounts: (eventId: string) => Promise<{ total: number; used: number } | null>;
@@ -349,7 +387,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [followedOrganizers, setFollowedOrganizers] = useState<string[]>([]);
   const [followerCount, setFollowerCount] = useState(0);
   const [ratingSummary, setRatingSummary] = useState<{ avg: number | null; count: number }>({ avg: null, count: 0 });
+  const [orgRole, setOrgRole] = useState<OrgRole | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [staffInvites, setStaffInvites] = useState<StaffInvite[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [staffAssignments, setStaffAssignments] = useState<StaffAssignment[]>([]);
   const [rateApplied, setRateApplied] = useState(0);
 
@@ -483,10 +524,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // --- Perfil de organizador propio -----------------------------------------
   const fetchMyOrganizer = useCallback(async (uid: string) => {
-    // my_organizer() devuelve la fila completa solo a su dueño: cédula, cuenta de cobro y comisión
-    // ya no son legibles para el resto (antes cualquiera las veía sin siquiera iniciar sesión).
-    const { data: rows } = await supabase.rpc("my_organizer");
-    const data: any = (rows as any[] | null)?.[0] ?? null;
+    // my_workspace(): organizador + rol de quien inicia sesión. El dueño recibe su fila completa; el
+    // equipo la recibe sin cédula, cuenta de cobro ni motivo de rechazo.
+    const { data: ws } = await supabase.rpc("my_workspace");
+    const data: any = (ws as any)?.organizer ?? null;
+    setOrgRole(((ws as any)?.role as OrgRole | undefined) ?? null);
     if (data) {
       setMyOrganizerId(data.id);
       setOrganizerStatus(mapOrganizerStatus(data.verification_status));
@@ -690,11 +732,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const fetchStaff = useCallback(async (uid: string, organizerId: string | null) => {
     const [{ data: mine }, { data: assigned }] = await Promise.all([
       organizerId
-        ? supabase.from("organizer_staff").select("id, email, full_name").eq("organizer_id", organizerId).order("created_at")
+        ? supabase.from("organizer_staff").select("id, email, full_name, role").eq("organizer_id", organizerId).order("created_at")
         : Promise.resolve({ data: [] as any[] }),
       supabase.from("organizer_staff").select("organizer_id, organizers(name)").eq("user_id", uid),
     ]);
-    setStaff((mine ?? []).map((r: any) => ({ id: r.id, email: r.email, name: r.full_name || r.email })));
+    setStaff((mine ?? []).map((r: any) => ({ id: r.id, email: r.email, name: r.full_name || r.email, role: r.role })));
+    if (organizerId) {
+      const { data: inv } = await supabase.from("staff_invites").select("id, email, role").eq("organizer_id", organizerId).order("created_at");
+      setStaffInvites((inv ?? []) as StaffInvite[]);
+    } else {
+      setStaffInvites([]);
+    }
     setStaffAssignments(
       (assigned ?? []).map((r: any) => ({ organizerId: r.organizer_id, organizerName: r.organizers?.name ?? "Organizador" }))
     );
@@ -793,6 +841,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setAnalyticsTickets([]);
         setAnalyticsViews([]);
         setStaff([]);
+        setStaffInvites([]);
+        setSupportTickets([]);
+        setOrgRole(null);
         setStaffAssignments([]);
         setBalance(EMPTY_BALANCE);
         setWithdrawals([]);
@@ -1407,6 +1458,64 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       .then(({ data }) => setRatingSummary(data ? { avg: Number((data as any).rating_avg), count: Number((data as any).rating_count) } : { avg: null, count: 0 }));
   }, [myOrganizerId, events]);
 
+  const fetchSupportTickets = useCallback(async (uid: string) => {
+    const { data } = await supabase
+      .from("support_tickets")
+      .select("id, category, subject, status, priority, last_message_at")
+      .eq("user_id", uid)
+      .order("last_message_at", { ascending: false });
+    setSupportTickets(
+      (data ?? []).map((r: any) => ({ id: r.id, category: r.category, subject: r.subject, status: r.status, priority: r.priority, lastMessageAt: r.last_message_at }))
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchSupportTickets(userId);
+    const channel = supabase
+      .channel(`plann-support-${userId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "support_tickets", filter: `user_id=eq.${userId}` }, () => fetchSupportTickets(userId))
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, fetchSupportTickets]);
+
+  const fetchSupportMessages = useCallback(async (ticketId: string): Promise<SupportMessage[]> => {
+    const { data } = await supabase.from("support_messages").select("id, author_role, body, created_at").eq("ticket_id", ticketId).order("created_at");
+    return (data ?? []).map((r: any) => ({ id: r.id, fromStaff: r.author_role === "staff", body: r.body, createdAt: r.created_at }));
+  }, []);
+
+  const createSupportTicket = useCallback(
+    async (category: string, subject: string, body: string) => {
+      const { data, error } = await supabase.rpc("create_support_ticket", { p_category: category, p_subject: subject, p_body: body, p_order_id: null, p_event_id: null });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo enviar tu consulta.") };
+      if (userId) await fetchSupportTickets(userId);
+      return { ok: true, ticketId: (data as any)?.id as string | undefined };
+    },
+    [userId, fetchSupportTickets]
+  );
+
+  const replySupport = useCallback(
+    async (ticketId: string, body: string): Promise<Result> => {
+      const { error } = await supabase.rpc("reply_support_ticket", { p_ticket_id: ticketId, p_body: body });
+      if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo enviar tu mensaje.") };
+      if (userId) await fetchSupportTickets(userId);
+      return { ok: true };
+    },
+    [userId, fetchSupportTickets]
+  );
+
+  const cancelStaffInvite = useCallback(
+    async (inviteId: string): Promise<Result> => {
+      const { error } = await supabase.rpc("cancel_staff_invite", { p_invite_id: inviteId });
+      if (error) return { ok: false, reason: "No se pudo cancelar la invitación." };
+      if (userId) await fetchStaff(userId, myOrganizerId);
+      return { ok: true };
+    },
+    [userId, myOrganizerId, fetchStaff]
+  );
+
   const markNotificationsRead = useCallback(
     async (ids?: string[]) => {
       if (!userId) return;
@@ -1530,11 +1639,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   );
 
   const addStaff = useCallback(
-    async (email: string): Promise<Result> => {
-      const { error } = await supabase.rpc("add_door_staff", { p_email: email });
+    async (email: string, role: StaffRole): Promise<Result & { invited?: boolean }> => {
+      const { data, error } = await supabase.rpc("add_door_staff", { p_email: email, p_role: role });
       if (error) return { ok: false, reason: dbErrorMessage(error.message, "No se pudo agregar a esa persona.") };
       if (userId) await fetchStaff(userId, myOrganizerId);
-      return { ok: true };
+      return { ok: true, invited: (data as any)?.status === "invited" };
     },
     [userId, myOrganizerId, fetchStaff]
   );
@@ -1640,8 +1749,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       notifications,
       unreadCount,
       markNotificationsRead,
+      orgRole,
       staff,
+      staffInvites,
       staffAssignments,
+      supportTickets,
+      fetchSupportMessages,
+      createSupportTicket,
+      replySupport,
+      cancelStaffInvite,
       followedOrganizers,
       toggleFollow,
       followerCount,
@@ -1713,8 +1829,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       notifications,
       unreadCount,
       markNotificationsRead,
+      orgRole,
       staff,
+      staffInvites,
       staffAssignments,
+      supportTickets,
+      fetchSupportMessages,
+      createSupportTicket,
+      replySupport,
+      cancelStaffInvite,
       followedOrganizers,
       toggleFollow,
       followerCount,

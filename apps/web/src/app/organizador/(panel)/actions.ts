@@ -19,6 +19,11 @@ const DB_ERRORS: Record<string, string> = {
   cannot_add_self: "Ya eres el dueño, no hace falta agregarte.",
   not_authorized: "No tienes permiso para hacer esto.",
   sold_out: "No quedan entradas suficientes de ese tipo.",
+  staff_limit_reached: "Llegaste al máximo de personas de tu plan (Básico 1, Pro 5, Business 50).",
+  invalid_role: "Elige un rol válido.",
+  support_text_short: "Cuéntanos un poco más: el asunto y el mensaje son muy cortos.",
+  support_too_many_open: "Ya tienes 5 consultas abiertas. Espera a que respondamos alguna.",
+  ticket_closed: "Esta consulta está cerrada. Abre una nueva si sigues con el problema.",
   order_not_refundable: "Esta compra ya no se puede reembolsar.",
   tickets_used: "Alguien ya entró con estas entradas: no se puede reembolsar.",
   comp_no_refund: "Las cortesías no se reembolsan.",
@@ -386,12 +391,21 @@ export async function requestWithdrawalAction(_prev: FormState, formData: FormDa
 export async function addStaffAction(_prev: FormState, formData: FormData): Promise<FormState> {
   await requireOrganizer();
   const email = String(formData.get("email") ?? "").trim();
+  const role = String(formData.get("role") ?? "door");
   if (!/^\S+@\S+\.\S+$/.test(email)) return { error: "Escribe un correo válido." };
   const supabase = await supabaseServer();
-  const { error } = await supabase.rpc("add_door_staff", { p_email: email });
+  const { data, error } = await supabase.rpc("add_door_staff", { p_email: email, p_role: role });
   if (error) return { error: dbError(error.message, "No pudimos agregar a esa persona.") };
   revalidatePath("/organizador/equipo");
-  return { ok: "Listo. Ya puede validar entradas de todos tus eventos desde la app." };
+  const status = (data as { status?: string } | null)?.status;
+  return { ok: status === "invited" ? "Invitación guardada. Cuando cree su cuenta en Plann entrará al equipo sola." : "Listo. Ya forma parte de tu equipo." };
+}
+
+export async function cancelStaffInviteAction(id: string): Promise<void> {
+  await requireOrganizer();
+  const supabase = await supabaseServer();
+  await supabase.rpc("cancel_staff_invite", { p_invite_id: id });
+  revalidatePath("/organizador/equipo");
 }
 
 export async function removeStaffAction(staffId: string): Promise<void> {
@@ -516,4 +530,35 @@ export async function replyReviewAction(reviewId: string, _prev: FormState, form
   if (error) return { error: dbError(error.message, "No pudimos enviar tu respuesta.") };
   revalidatePath("/organizador/resenas");
   return { ok: "Respuesta publicada." };
+}
+
+export async function markNotificationsReadAction(): Promise<void> {
+  const supabase = await supabaseServer();
+  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+  revalidatePath("/organizador", "layout");
+}
+
+export async function createSupportTicketAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const supabase = await supabaseServer();
+  const { data, error } = await supabase.rpc("create_support_ticket", {
+    p_category: String(formData.get("category") ?? "otro"),
+    p_subject: String(formData.get("subject") ?? ""),
+    p_body: String(formData.get("body") ?? ""),
+    p_order_id: null,
+    p_event_id: null,
+  });
+  if (error) return { error: dbError(error.message, "No pudimos enviar tu consulta.") };
+  revalidatePath("/organizador/soporte");
+  const t = data as { id: string; priority: string };
+  redirect(`/organizador/soporte/${t.id}`);
+}
+
+export async function replySupportAction(ticketId: string, _prev: FormState, formData: FormData): Promise<FormState> {
+  await requireOrganizer();
+  const supabase = await supabaseServer();
+  const { error } = await supabase.rpc("reply_support_ticket", { p_ticket_id: ticketId, p_body: String(formData.get("body") ?? "") });
+  if (error) return { error: dbError(error.message, "No pudimos enviar tu mensaje.") };
+  revalidatePath(`/organizador/soporte/${ticketId}`);
+  return { ok: "Mensaje enviado." };
 }

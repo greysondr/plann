@@ -1,6 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireOrganizer } from "@/lib/org/session";
 import { loadEvents, loadOrders } from "@/lib/org/data";
 import { funnel } from "@/lib/org/analytics";
 import { pct, usd } from "@/lib/format";
@@ -26,7 +26,7 @@ const MATCH: Record<string, (s: string) => boolean> = {
 };
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<{ evento?: string; estado?: string }> }) {
-  const { organizer } = await requireOrganizer();
+  const { organizer, role } = await requireOrganizer();
   const { evento, estado } = await searchParams;
   const state = MATCH[estado ?? ""] ? estado! : "todos";
 
@@ -88,7 +88,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
             status: o.status,
             currency: o.currency_paid,
             comp: !!o.is_comp,
-            refundable: o.status === "paid" && !o.is_comp && !closedEvents.has(o.event_id),
+            refundable: can.owner(role) && o.status === "paid" && !o.is_comp && !closedEvents.has(o.event_id),
           }))}
         />
       </Card>

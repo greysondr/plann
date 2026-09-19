@@ -1,11 +1,11 @@
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { Badge, Card, CardHeader, PageHeader } from "@/components/ui";
 import { ProfileForm } from "@/components/org/SimpleForms";
 
 const PLAN: Record<string, string> = { basico: "Básico", pro: "Pro", business: "Business" };
 
 export default async function SettingsPage() {
-  const { organizer, user } = await requireOrganizer();
+  const { organizer, user } = await requireRole(can.owner);
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader title="Configuración" subtitle="Tu perfil público y los datos donde recibes tus pagos." />

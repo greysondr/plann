@@ -4,16 +4,25 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GlassCard } from "../../src/components/GlassCard";
 import { PrimaryButton } from "../../src/components/Button";
+import { Chip } from "../../src/components/Chip";
 import { ChevronRight } from "../../src/components/icons";
-import { useAppStore } from "../../src/context/AppStore";
+import { useAppStore, type StaffRole } from "../../src/context/AppStore";
 import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
 import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+
+const LIMIT = { basico: 1, pro: 5, business: 50 } as const;
+const ROLE_INFO: Record<StaffRole, { label: string; hint: string }> = {
+  door: { label: "Puerta", hint: "Solo valida entradas desde su teléfono. No ve ventas ni compradores." },
+  editor: { label: "Editor", hint: "Publica y edita eventos, cupones, cortesías y mensajes. No ve retiros, no cancela ni reembolsa." },
+  finance: { label: "Finanzas", hint: "Solo lectura de ventas, saldo, retiros y reportes. No edita nada ni retira." },
+};
 
 export default function EquipoScreen() {
   const allowed = useOrganizerGuard();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { staff, addStaff, removeStaff } = useAppStore();
+  const { staff, staffInvites, addStaff, removeStaff, cancelStaffInvite, organizerProfile } = useAppStore();
+  const [role, setRole] = useState<StaffRole>("door");
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
@@ -25,11 +34,11 @@ export default function EquipoScreen() {
   async function handleAdd() {
     setSending(true);
     setMessage(null);
-    const result = await addStaff(email.trim());
+    const result = await addStaff(email.trim(), role);
     setSending(false);
     if (result.ok) {
       setEmail("");
-      setMessage({ text: "Listo. Ya puede validar entradas de todos tus eventos.", error: false });
+      setMessage({ text: result.invited ? "Invitación guardada. Cuando cree su cuenta en Plann entrará al equipo sola." : "Listo. Ya forma parte de tu equipo.", error: false });
     } else {
       setMessage({ text: result.reason ?? "No se pudo agregar.", error: true });
     }
@@ -43,22 +52,28 @@ export default function EquipoScreen() {
             <ChevronRight color={color.text} />
           </View>
         </Pressable>
-        <Text style={styles.title}>Equipo de puerta</Text>
+        <Text style={styles.title}>Equipo</Text>
         <View style={{ width: 18 }} />
       </View>
 
       <View style={styles.section}>
         <Text style={styles.intro}>
-          El personal de puerta solo valida entradas en la entrada del evento. No ve tus ventas, tu saldo ni los datos de los compradores.
+          Cada rol solo ve y hace lo que le corresponde. Tu plan permite {LIMIT[organizerProfile?.plan ?? "basico"]} {LIMIT[organizerProfile?.plan ?? "basico"] === 1 ? "persona" : "personas"}; llevas {staff.length + staffInvites.length}.
         </Text>
       </View>
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Agregar persona</Text>
+        <View style={styles.roleChips}>
+          {(Object.keys(ROLE_INFO) as StaffRole[]).map((r) => (
+            <Chip key={r} label={ROLE_INFO[r].label} selected={role === r} onPress={() => setRole(r)} />
+          ))}
+        </View>
+        <Text style={styles.hint}>{ROLE_INFO[role].hint}</Text>
         <TextInput
           value={email}
           onChangeText={setEmail}
-          placeholder="Correo con el que se registró en Plann"
+          placeholder="Correo de la persona"
           placeholderTextColor={color.text4}
           keyboardType="email-address"
           autoCapitalize="none"
@@ -71,7 +86,7 @@ export default function EquipoScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Tu equipo</Text>
-        {staff.length === 0 ? (
+        {staff.length === 0 && staffInvites.length === 0 ? (
           <Text style={styles.hint}>Todavía no has agregado a nadie.</Text>
         ) : (
           <View style={{ gap: 10, marginTop: 6 }}>
@@ -80,10 +95,26 @@ export default function EquipoScreen() {
                 <View style={styles.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.name}>{member.name}</Text>
-                    {member.name !== member.email && <Text style={styles.hint}>{member.email}</Text>}
+                    <Text style={styles.hint}>
+                      {ROLE_INFO[member.role].label}
+                      {member.name !== member.email ? ` · ${member.email}` : ""}
+                    </Text>
                   </View>
                   <Pressable onPress={() => removeStaff(member.id)} hitSlop={8}>
                     <Text style={styles.remove}>Quitar</Text>
+                  </Pressable>
+                </View>
+              </GlassCard>
+            ))}
+            {staffInvites.map((inv) => (
+              <GlassCard key={inv.id} level="card">
+                <View style={styles.row}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>{inv.email}</Text>
+                    <Text style={styles.hint}>{ROLE_INFO[inv.role].label} · Invitada, aún sin cuenta</Text>
+                  </View>
+                  <Pressable onPress={() => cancelStaffInvite(inv.id)} hitSlop={8}>
+                    <Text style={styles.remove}>Cancelar</Text>
                   </Pressable>
                 </View>
               </GlassCard>
@@ -118,6 +149,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: color.text,
   },
+  roleChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
   message: { fontFamily: fontFamily.semiBold, fontSize: 13, color: color.text2, marginTop: 12 },
   messageError: { color: color.pink },
   hint: { fontFamily: fontFamily.regular, fontSize: 12.5, color: color.text3, marginTop: 2 },

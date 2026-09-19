@@ -1,4 +1,4 @@
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadCoupons, loadEvents } from "@/lib/org/data";
 import { shortDate, usd } from "@/lib/format";
 import { Badge, Button, Card, CardHeader, EmptyState, PageHeader, Table, Td, Th, Tr } from "@/components/ui";
@@ -8,7 +8,7 @@ import { deleteCouponAction, toggleCouponAction } from "../actions";
 export const dynamic = "force-dynamic";
 
 export default async function CouponsPage() {
-  const { organizer } = await requireOrganizer();
+  const { organizer } = await requireRole(can.manage);
   const [coupons, events] = await Promise.all([loadCoupons(organizer.id), loadEvents(organizer.id)]);
   const title = new Map(events.map((e) => [e.id, e.title]));
   const open = events.filter((e) => !["cancelled", "finished"].includes(e.status));

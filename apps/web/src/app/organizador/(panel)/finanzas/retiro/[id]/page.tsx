@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadWithdrawals } from "@/lib/org/data";
 import { longDateTime, usd } from "@/lib/format";
 import { Badge } from "@/components/ui";
@@ -13,7 +13,7 @@ const STATUS = { pendiente: "En proceso", pagado: "Pagado", rechazado: "Rechazad
 
 export default async function WithdrawalReceiptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { organizer } = await requireOrganizer();
+  const { organizer } = await requireRole(can.money);
   const withdrawals = await loadWithdrawals(organizer.id);
   const w = withdrawals.find((x) => x.id === id);
   if (!w) notFound();

@@ -4,6 +4,7 @@ import { getOrganizerContext } from "@/lib/org/session";
 import { signOut } from "@/app/organizador/actions";
 import { ApplyForm } from "@/components/org/Forms";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
+import { countUnread } from "@/lib/org/data";
 import { Badge, Button, Card } from "@/components/ui";
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -28,9 +29,9 @@ function Gate({ children }: { children: React.ReactNode }) {
 export default async function PanelLayout({ children }: { children: React.ReactNode }) {
   const ctx = await getOrganizerContext();
   if (!ctx) redirect("/organizador/login");
-  const { organizer, user } = ctx;
+  const { organizer, user, role } = ctx;
 
-  if (!organizer) {
+  if (!organizer || !role) {
     return (
       <Gate>
         <h1 className="text-[20px] font-extrabold text-foreground">Conviértete en organizador</h1>
@@ -79,9 +80,10 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     );
   }
 
+  const unread = await countUnread();
   return (
     <div className="flex min-h-screen items-start">
-      <OrgSidebar organizerName={organizer.name} email={user.email ?? ""} />
+      <OrgSidebar organizerName={organizer.name} email={user.email ?? ""} role={role} unread={unread} />
       <main className="min-w-0 flex-1 px-8 py-7">{children}</main>
     </div>
   );

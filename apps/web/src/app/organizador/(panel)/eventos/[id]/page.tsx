@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireOrganizer } from "@/lib/org/session";
 import { loadAnnouncements, loadAttendees, loadEvents, loadLinkStats, loadOrders, loadTickets, loadViews } from "@/lib/org/data";
 import QRCode from "qrcode";
 import { SITE_URL } from "@/lib/supabase/public";
@@ -18,7 +18,8 @@ export const dynamic = "force-dynamic";
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { organizer } = await requireOrganizer();
+  const { organizer, role } = await requireOrganizer();
+  const manage = can.manage(role);
   const events = await loadEvents(organizer.id);
   const event = events.find((e) => e.id === id);
   if (!event) notFound();
@@ -55,7 +56,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         action={
           <div className="flex flex-wrap items-center gap-2">
             <EventStatusBadge status={event.status} paused={event.sales_paused} />
-            {!closed && (
+            {!closed && manage && (
               <>
                 <form action={setSalesPausedAction.bind(null, event.id, !event.sales_paused)}>
                   <Button type="submit" variant="ghost">
@@ -67,11 +68,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                 </Link>
               </>
             )}
-            <form action={duplicateEventAction.bind(null, event.id)}>
+            {manage && <form action={duplicateEventAction.bind(null, event.id)}>
               <Button type="submit" variant="ghost">
                 Duplicar
               </Button>
-            </form>
+            </form>}
           </div>
         }
       />
@@ -158,7 +159,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         <AttendeesTable eventId={event.id} eventTitle={event.title} attendees={attendees} />
       </Card>
 
-      {!closed && (
+      {!closed && manage && (
         <div className="grid gap-4 xl:grid-cols-2">
           <Card>
             <CardHeader title="Invitar a alguien" subtitle="Entradas de cortesía" />
@@ -187,7 +188,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {!closed && event.status !== "draft" && (
+      {!closed && manage && event.status !== "draft" && (
         <Card>
           <CardHeader
             title="Compartir"
@@ -219,12 +220,14 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
         </Card>
       )}
 
+      {manage && (
       <Card>
         <CardHeader title="Repetir este evento" subtitle="Para eventos que se hacen cada semana o cada mes" />
         <div className="p-5">
           <RepeatForm eventId={event.id} />
         </div>
       </Card>
+      )}
 
       <Card>
         <CardHeader title="Pedidos del evento" />

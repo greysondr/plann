@@ -1,4 +1,4 @@
-import { requireOrganizer } from "@/lib/org/session";
+import { can, requireRole } from "@/lib/org/session";
 import { loadBalance, loadEvents, loadOrders, loadWithdrawals, pendingRelease } from "@/lib/org/data";
 import { currencySplit, eventSettlements, monthlySummary } from "@/lib/org/analytics";
 import { shortDate, usd } from "@/lib/format";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const METHOD: Record<string, string> = { pago_movil: "Pago Móvil", transfer: "Transferencia", zelle: "Zelle" };
 
 export default async function FinancesPage() {
-  const { organizer } = await requireOrganizer();
+  const { organizer, role } = await requireRole(can.money);
   const events = await loadEvents(organizer.id);
   const [balance, withdrawals, orders] = await Promise.all([loadBalance(organizer.id), loadWithdrawals(organizer.id), loadOrders(events.map((e) => e.id))]);
   const months = monthlySummary(orders);
