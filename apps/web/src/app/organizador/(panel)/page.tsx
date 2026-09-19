@@ -16,6 +16,7 @@ import {
   weekdayDistribution,
 } from "@/lib/org/analytics";
 import { longDateTime, pct, shortDate, usd } from "@/lib/format";
+import { NAV } from "@/lib/org/nav";
 import { Card, CardHeader, EmptyState, PageHeader, StatCard, Table, Td, Th, Tr } from "@/components/ui";
 import { ColumnChart, Donut, HorizontalBars, SalesChart } from "@/components/org/charts";
 import { EventStatusBadge, OrderStatusBadge, ProgressBar, RangeTabs, Thumb, deltaText } from "@/components/org/bits";
@@ -70,6 +71,19 @@ export default async function OrganizerDashboard({ searchParams }: { searchParam
         subtitle={`Resumen de los últimos ${range} días, comparado con los ${range} anteriores.`}
         action={<RangeTabs current={range} basePath="/organizador" />}
       />
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        {NAV.filter((n) => n.roles.includes(role) && ["/organizador/eventos/nuevo", "/organizador/ventas", "/organizador/finanzas", "/organizador/cupones", "/organizador/reportes", "/organizador/equipo"].includes(n.href)).map((n) => {
+          const Icon = n.icon;
+          return (
+            <Link key={n.href} href={n.href} className="group flex flex-col gap-1 rounded-2xl border border-border bg-surface p-4 transition-colors hover:border-pink">
+              <Icon size={18} className="text-pink" />
+              <span className="mt-1 text-[13.5px] font-bold text-foreground">{n.label}</span>
+              <span className="text-[12px] leading-snug text-foreground-3">{n.hint}</span>
+            </Link>
+          );
+        })}
+      </div>
 
       {pendingPayments > 0 && (
         <Card className="flex items-center gap-3 border-warning/30 bg-warning-soft px-5 py-3.5">

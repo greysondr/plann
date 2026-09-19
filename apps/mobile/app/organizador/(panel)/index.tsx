@@ -22,6 +22,8 @@ import {
   viewToPurchaseRate,
   weekdayDistribution,
 } from "../../../src/core/orgAnalytics";
+import { OrgToolTile } from "../../../src/components/OrgToolTile";
+import { toolsFor } from "../../../src/core/orgTools";
 import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
 
 const DAY = 24 * 3600 * 1000;
@@ -60,21 +62,13 @@ function Kpi({ label, value, hint, change }: { label: string; value: string; hin
   );
 }
 
-function QuickAction({ label, onPress, primary }: { label: string; onPress: () => void; primary?: boolean }) {
-  return (
-    <Pressable style={[styles.quick, primary && styles.quickPrimary]} onPress={onPress}>
-      <Text style={[styles.quickText, primary && { color: color.white }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 export default function OrganizadorScreen() {
   const allowed = useOrganizerGuard();
   const router = useRouter();
   const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets, analyticsViews, followerCount, ratingSummary, orgRole } = useAppStore();
-  const canManage = orgRole === "owner" || orgRole === "editor";
   const canMoney = orgRole === "owner" || orgRole === "finance";
-  const isOwner = orgRole === "owner";
+  const { unreadCount } = useAppStore();
+  const quickTools = toolsFor(orgRole).filter((t) => t.quick).slice(0, 6);
   const [range, setRange] = useState(30);
 
   const myEvents = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
@@ -101,6 +95,8 @@ export default function OrganizadorScreen() {
     };
   }, [analyticsOrders, analyticsTickets, analyticsViews, myEvents, range]);
 
+  const badges: Record<string, number> = { notificaciones: unreadCount, ventas: stats.pending };
+
   if (!allowed) return null;
 
   const upcoming = myEvents
@@ -120,11 +116,18 @@ export default function OrganizadorScreen() {
         <NotificationBell />
       </View>
 
-      <View style={[styles.section, styles.quickRow]}>
-        {canManage && <QuickAction label="Publicar" onPress={() => router.push("/organizador/crear")} primary />}
-        {canMoney && <QuickAction label="Retirar" onPress={() => router.push("/organizador/retiros")} />}
-        {isOwner && <QuickAction label="Equipo" onPress={() => router.push("/organizador/equipo")} />}
-        {isOwner && <QuickAction label="Mi negocio" onPress={() => router.push("/organizador/negocio")} />}
+      <View style={styles.section}>
+        <View style={styles.toolsHeader}>
+          <Text style={styles.toolsTitle}>Herramientas</Text>
+          <Pressable onPress={() => router.push("/organizador/mas")} hitSlop={8}>
+            <Text style={styles.toolsAll}>Ver todas</Text>
+          </Pressable>
+        </View>
+        <View style={styles.toolsGrid}>
+          {quickTools.map((tool) => (
+            <OrgToolTile key={tool.id} tool={tool} badge={badges[tool.id]} onPress={() => router.push(tool.route as never)} />
+          ))}
+        </View>
       </View>
 
       {canMoney && <View style={styles.section}>
@@ -290,10 +293,10 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   pageTitle: { fontFamily: fontFamily.extraBold, fontSize: 22, color: color.text },
-  quickRow: { flexDirection: "row", gap: 8 },
-  quick: { flex: 1, minHeight: 42, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
-  quickPrimary: { backgroundColor: color.pink, borderColor: color.pink },
-  quickText: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.text2 },
+  toolsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  toolsTitle: { fontFamily: fontFamily.extraBold, fontSize: 16, color: color.text },
+  toolsAll: { fontFamily: fontFamily.bold, fontSize: 13, color: color.pink },
+  toolsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   section: { paddingHorizontal: spacing.screenX, marginBottom: 20 },
   sectionTitle: { fontFamily: fontFamily.extraBold, fontSize: 16, color: color.text, marginBottom: 10 },
   identity: { flexDirection: "row", alignItems: "center", gap: 12 },

@@ -164,6 +164,11 @@ export default function EventosScreen() {
                         <Text style={[styles.chipText, { color: color.white }]}>Publicar</Text>
                       </Pressable>
                     )}
+                    {!closed && (
+                      <Pressable style={styles.chip} onPress={() => router.push(`/organizador/ofertas/${event.id}`)}>
+                        <Text style={styles.chipText}>Ofertas</Text>
+                      </Pressable>
+                    )}
                     <Pressable style={styles.chip} disabled={busy === event.id} onPress={() => handleDuplicate(event.id)}>
                       <Text style={styles.chipText}>Duplicar</Text>
                     </Pressable>

@@ -329,3 +329,22 @@ export async function loadSupportTicket(id: string): Promise<{ ticket: SupportTi
   const { data: messages } = await supabase.from("support_messages").select("id, author_role, body, created_at").eq("ticket_id", id).order("created_at");
   return { ticket: ticket as SupportTicketRow, messages: (messages ?? []) as TicketMessageRow[] };
 }
+
+export async function countPendingPayments(): Promise<number> {
+  const supabase = await supabaseServer();
+  const { count } = await supabase.from("orders").select("id", { count: "exact", head: true }).in("status", ["pending_payment", "in_verification"]);
+  return count ?? 0;
+}
+
+export interface EventLink {
+  id: string;
+  title: string;
+  status: string;
+  starts_at: string;
+}
+
+export async function loadEventLinks(organizerId: string): Promise<EventLink[]> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.from("events").select("id, title, status, starts_at").eq("organizer_id", organizerId).order("starts_at", { ascending: false }).limit(40);
+  return (data ?? []) as EventLink[];
+}

@@ -4,7 +4,8 @@ import { getOrganizerContext } from "@/lib/org/session";
 import { signOut } from "@/app/organizador/actions";
 import { ApplyForm } from "@/components/org/Forms";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
-import { countUnread } from "@/lib/org/data";
+import { countPendingPayments, countUnread, loadEventLinks } from "@/lib/org/data";
+import { CommandPalette } from "@/components/org/CommandPalette";
 import { Badge, Button, Card } from "@/components/ui";
 
 function Gate({ children }: { children: React.ReactNode }) {
@@ -80,10 +81,11 @@ export default async function PanelLayout({ children }: { children: React.ReactN
     );
   }
 
-  const unread = await countUnread();
+  const [unread, pending, eventLinks] = await Promise.all([countUnread(), countPendingPayments(), loadEventLinks(organizer.id)]);
   return (
     <div className="flex min-h-screen items-start">
-      <OrgSidebar organizerName={organizer.name} email={user.email ?? ""} role={role} unread={unread} />
+      <OrgSidebar organizerName={organizer.name} email={user.email ?? ""} role={role} unread={unread} pending={pending} />
+      <CommandPalette role={role} events={eventLinks} />
       <main className="min-w-0 flex-1 px-8 py-7">{children}</main>
     </div>
   );
