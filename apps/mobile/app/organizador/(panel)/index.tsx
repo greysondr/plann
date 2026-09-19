@@ -1,16 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { GlassCard } from "../../src/components/GlassCard";
-import { Chip } from "../../src/components/Chip";
-import { AreaChart, BarList, ColumnChart } from "../../src/components/charts";
-import { ChevronRight, ScanIcon } from "../../src/components/icons";
-import { PrimaryButton } from "../../src/components/Button";
-import { useAppStore } from "../../src/context/AppStore";
-import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
-import { formatEventDate, formatShortDate } from "../../src/utils/format";
-import { formatUsd } from "../../src/core/pricing";
+import { GlassCard } from "../../../src/components/GlassCard";
+import { Chip } from "../../../src/components/Chip";
+import { AreaChart, BarList, ColumnChart } from "../../../src/components/charts";
+import { OrganizerHeader } from "../../../src/components/OrganizerHeader";
+import { useAppStore } from "../../../src/context/AppStore";
+import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
+import { formatEventDate, formatShortDate } from "../../../src/utils/format";
+import { formatUsd } from "../../../src/core/pricing";
 import {
   attendance,
   buyerStats,
@@ -20,11 +18,10 @@ import {
   sumBy,
   totalsBetween,
   weekdayDistribution,
-} from "../../src/core/orgAnalytics";
-import { color, fontFamily, radius, spacing } from "../../src/theme/tokens";
+} from "../../../src/core/orgAnalytics";
+import { color, fontFamily, radius, spacing } from "../../../src/theme/tokens";
 
 const DAY = 24 * 3600 * 1000;
-const PLAN_LABEL: Record<string, string> = { basico: "Plan Básico", pro: "Plan Pro", business: "Plan Business" };
 const ORDER_LABEL: Record<string, string> = {
   paid: "Pagada",
   pending_payment: "Pendiente",
@@ -60,23 +57,18 @@ function Kpi({ label, value, hint, change }: { label: string; value: string; hin
   );
 }
 
-function MenuRow({ label, hint, onPress }: { label: string; hint?: string; onPress: () => void }) {
+function QuickAction({ label, onPress, primary }: { label: string; onPress: () => void; primary?: boolean }) {
   return (
-    <Pressable style={styles.menuRow} onPress={onPress}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.menuLabel}>{label}</Text>
-        {hint && <Text style={styles.menuHint}>{hint}</Text>}
-      </View>
-      <ChevronRight color={color.text3} />
+    <Pressable style={[styles.quick, primary && styles.quickPrimary]} onPress={onPress}>
+      <Text style={[styles.quickText, primary && { color: color.white }]}>{label}</Text>
     </Pressable>
   );
 }
 
 export default function OrganizadorScreen() {
   const allowed = useOrganizerGuard();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { events, organizerProfile, myOrganizerId, balance, analyticsOrders, analyticsTickets, staff } = useAppStore();
+  const { events, myOrganizerId, balance, analyticsOrders, analyticsTickets } = useAppStore();
   const [range, setRange] = useState(30);
 
   const myEvents = useMemo(() => events.filter((e) => e.organizerId === myOrganizerId), [events, myOrganizerId]);
@@ -111,34 +103,20 @@ export default function OrganizadorScreen() {
   const avgOrder = stats.cur.orders > 0 ? stats.cur.grossCents / stats.cur.orders : 0;
   const netChange = delta(deltaPct(stats.cur.netCents, stats.prev.netCents));
   const ticketsChange = delta(deltaPct(stats.cur.tickets, stats.prev.tickets));
-  const activeEvents = myEvents.filter((e) => ["published", "sold_out", "live"].includes(e.status ?? "")).length;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 60 }}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <View style={{ transform: [{ rotate: "180deg" }] }}>
-            <ChevronRight color={color.text} />
-          </View>
-        </Pressable>
-        <Text style={styles.title}>Organizador</Text>
-        <View style={{ width: 18 }} />
+    <View style={{ flex: 1 }}>
+      <OrganizerHeader />
+      <ScrollView contentContainerStyle={{ paddingBottom: 150 }}>
+      <View style={styles.section}>
+        <Text style={styles.pageTitle}>Resumen</Text>
       </View>
 
-      <View style={[styles.section, styles.identity]}>
-        {organizerProfile?.logoUrl ? (
-          <Image source={{ uri: organizerProfile.logoUrl }} style={styles.logo} />
-        ) : (
-          <View style={[styles.logo, styles.logoFallback]}>
-            <Text style={styles.logoInitial}>{(organizerProfile?.name ?? "P").slice(0, 1).toUpperCase()}</Text>
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={styles.organizerName} numberOfLines={1}>
-            {organizerProfile?.name ?? "Tu negocio"}
-          </Text>
-          <Text style={styles.organizerPlan}>{PLAN_LABEL[organizerProfile?.plan ?? "basico"]}</Text>
-        </View>
+      <View style={[styles.section, styles.quickRow]}>
+        <QuickAction label="Publicar" onPress={() => router.push("/organizador/crear")} primary />
+        <QuickAction label="Retirar" onPress={() => router.push("/organizador/retiros")} />
+        <QuickAction label="Equipo" onPress={() => router.push("/organizador/equipo")} />
+        <QuickAction label="Mi negocio" onPress={() => router.push("/organizador/negocio")} />
       </View>
 
       <View style={styles.section}>
@@ -223,15 +201,6 @@ export default function OrganizadorScreen() {
       )}
 
       <View style={styles.section}>
-        <View style={styles.actionsRow}>
-          <PrimaryButton label="Publicar evento" onPress={() => router.push("/organizador/crear")} style={{ flex: 1 }} />
-          <Pressable style={styles.scanButton} onPress={() => router.push("/organizador/escanear")}>
-            <ScanIcon size={20} />
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Próximos eventos</Text>
         {upcoming.length === 0 ? (
           <Text style={styles.empty}>No tienes eventos próximos.</Text>
@@ -265,21 +234,6 @@ export default function OrganizadorScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Gestionar</Text>
-        <GlassCard level="card">
-          <MenuRow label="Mis eventos" hint={`${activeEvents} activos · ${myEvents.length} en total`} onPress={() => router.push("/organizador/eventos")} />
-          <View style={styles.menuDivider} />
-          <MenuRow label="Ventas y pedidos" hint="Filtra, revisa y consulta cada pedido" onPress={() => router.push("/organizador/ventas")} />
-          <View style={styles.menuDivider} />
-          <MenuRow label="Retiros y finanzas" hint={`${formatUsd(balance.availableCents)} disponibles`} onPress={() => router.push("/organizador/retiros")} />
-          <View style={styles.menuDivider} />
-          <MenuRow label="Equipo de puerta" hint={staff.length === 0 ? "Nadie todavía" : `${staff.length} ${staff.length === 1 ? "persona" : "personas"}`} onPress={() => router.push("/organizador/equipo")} />
-          <View style={styles.menuDivider} />
-          <MenuRow label="Mi negocio" hint="Nombre, descripción, logo y cuenta de cobro" onPress={() => router.push("/organizador/negocio")} />
-        </GlassCard>
-      </View>
-
-      <View style={styles.section}>
         <Text style={styles.sectionTitle}>Últimos pedidos</Text>
         {analyticsOrders.length === 0 ? (
           <Text style={styles.empty}>Todavía no hay pedidos. Cuando alguien compre aparece aquí al instante.</Text>
@@ -304,7 +258,8 @@ export default function OrganizadorScreen() {
           </GlassCard>
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -316,7 +271,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 18,
   },
-  title: { fontFamily: fontFamily.extraBold, fontSize: 18, color: color.text },
+  pageTitle: { fontFamily: fontFamily.extraBold, fontSize: 22, color: color.text },
+  quickRow: { flexDirection: "row", gap: 8 },
+  quick: { flex: 1, minHeight: 42, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  quickPrimary: { backgroundColor: color.pink, borderColor: color.pink },
+  quickText: { fontFamily: fontFamily.bold, fontSize: 12.5, color: color.text2 },
   section: { paddingHorizontal: spacing.screenX, marginBottom: 20 },
   sectionTitle: { fontFamily: fontFamily.extraBold, fontSize: 16, color: color.text, marginBottom: 10 },
   identity: { flexDirection: "row", alignItems: "center", gap: 12 },

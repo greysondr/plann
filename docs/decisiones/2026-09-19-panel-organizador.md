@@ -54,3 +54,21 @@ pruebas). `scripts/sync-org-analytics.sh` la copia a
 - Sin reseñas, sin notificaciones push al organizador en cada venta.
 - Las analíticas se calculan en el cliente/servidor sobre todas las órdenes; con
   decenas de miles de pedidos conviene moverlas a funciones SQL agregadas.
+
+## Navegación del modo organizador en la app
+
+Entrar y moverse era engorroso (Perfil > botón > pantallas sueltas en cascada). Ahora:
+
+- **Barra inferior propia** del modo organizador: Resumen, Eventos, Escanear (botón
+  central destacado: es lo que más se usa el día del evento), Ventas y Más.
+  Las pantallas de detalle (crear, editar, analíticas, retiros, equipo, negocio)
+  se abren encima y vuelven a la pestaña donde estabas.
+- **Menú «Más»** con todo agrupado: Publicar, Día del evento (escanear, equipo),
+  Tu negocio (retiros, eventos, ventas, perfil) y Cuenta (cambiar de modo, salir).
+- **Entrada directa**: los organizadores verificados ven una pestaña «Organizar»
+  en la barra del comprador. Cada pantalla raíz del panel tiene un botón
+  «Modo comprador» arriba para volver con un toque.
+- **La app recuerda el último modo** (`src/lib/mode.ts`): quien cerró la app en su
+  panel la vuelve a abrir ahí. Solo al arrancar y solo si cae en el inicio, para
+  no pisar enlaces profundos.
+- Los eventos `finished` ya no se muestran como disponibles en Inicio ni Buscar.

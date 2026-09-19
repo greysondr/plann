@@ -44,7 +44,7 @@ export default function BuscarScreen() {
   const results = useMemo(() => {
     const q = normalizeSearch(query);
     return events.filter((event) => {
-      if (event.status === "cancelled") return false;
+      if (event.status === "cancelled" || event.status === "finished") return false;
       if (!matchesFilters(event)) return false;
       if (!q) return true;
       const haystack = normalizeSearch(`${event.title} ${event.city} ${event.venueName} ${event.category}`);

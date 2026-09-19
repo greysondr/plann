@@ -15,7 +15,7 @@ export default function HomeScreen() {
   const { events, categories } = useAppStore();
   const [category, setCategory] = useState("Todos");
 
-  const sellable = useMemo(() => events.filter((e) => !e.sourceCurated && e.status !== "cancelled"), [events]);
+  const sellable = useMemo(() => events.filter((e) => !e.sourceCurated && e.status !== "cancelled" && e.status !== "finished"), [events]);
   const curated = useMemo(() => events.filter((e) => e.sourceCurated), [events]);
   const tours = useMemo(() => sellable.filter((e) => e.kind === "tour" || e.kind === "experience"), [sellable]);
   const featured = useMemo(() => sellable.slice(0, 2), [sellable]);

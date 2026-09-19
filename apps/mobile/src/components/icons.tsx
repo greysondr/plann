@@ -56,8 +56,8 @@ export function ProfileIcon({ active, size = 22 }: IconProps) {
   );
 }
 
-export function ScanIcon({ active, size = 26 }: IconProps) {
-  const c = tint(active ?? true);
+export function ScanIcon({ active, size = 26, tintColor }: IconProps & { tintColor?: string }) {
+  const c = tintColor ?? tint(active ?? true);
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path d="M4 8V5a1 1 0 011-1h3" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
@@ -161,6 +161,56 @@ export function BellIcon({ active, size = 16 }: IconProps) {
         strokeLinejoin="round"
       />
       <Path d="M10 20a2 2 0 004 0" stroke={c} strokeWidth={1.8} strokeLinecap="round" fill="none" />
+    </Svg>
+  );
+}
+
+export function DashboardIcon({ active, size = 22 }: IconProps) {
+  const c = tint(active);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={4} y={4} width={6.5} height={6.5} rx={1.6} stroke={c} strokeWidth={1.8} />
+      <Rect x={13.5} y={4} width={6.5} height={6.5} rx={1.6} stroke={c} strokeWidth={1.8} />
+      <Rect x={4} y={13.5} width={6.5} height={6.5} rx={1.6} stroke={c} strokeWidth={1.8} />
+      <Rect x={13.5} y={13.5} width={6.5} height={6.5} rx={1.6} stroke={c} strokeWidth={1.8} />
+    </Svg>
+  );
+}
+
+export function CalendarIcon({ active, size = 22 }: IconProps) {
+  const c = tint(active);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x={4} y={5.5} width={16} height={14.5} rx={2.2} stroke={c} strokeWidth={1.8} />
+      <Path d="M4 10h16" stroke={c} strokeWidth={1.8} />
+      <Path d="M8.5 3.5v4M15.5 3.5v4" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function ReceiptIcon({ active, size = 22 }: IconProps) {
+  const c = tint(active);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M6 3.5h12v17l-2.4-1.6L13.2 20.5 12 19.6l-1.2.9-2.4-1.6L6 20.5v-17z" stroke={c} strokeWidth={1.8} strokeLinejoin="round" />
+      <Path d="M9.5 8.5h5M9.5 12h5" stroke={c} strokeWidth={1.8} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function MenuIcon({ active, size = 22 }: IconProps) {
+  const c = tint(active);
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M4.5 7h15M4.5 12h15M4.5 17h15" stroke={c} strokeWidth={1.9} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+export function PlusIcon({ size = 20, color: c = color.white }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 5v14M5 12h14" stroke={c} strokeWidth={2.2} strokeLinecap="round" />
     </Svg>
   );
 }

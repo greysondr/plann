@@ -1,16 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { GlassCard } from "../../src/components/GlassCard";
-import { Chip } from "../../src/components/Chip";
-import { ChevronRight } from "../../src/components/icons";
-import { useAppStore } from "../../src/context/AppStore";
-import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
-import { funnel } from "../../src/core/orgAnalytics";
-import { formatUsd } from "../../src/core/pricing";
-import { formatShortDate } from "../../src/utils/format";
-import { color, fontFamily, spacing } from "../../src/theme/tokens";
+import { GlassCard } from "../../../src/components/GlassCard";
+import { Chip } from "../../../src/components/Chip";
+import { OrganizerHeader } from "../../../src/components/OrganizerHeader";
+import { useAppStore } from "../../../src/context/AppStore";
+import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
+import { funnel } from "../../../src/core/orgAnalytics";
+import { formatUsd } from "../../../src/core/pricing";
+import { formatShortDate } from "../../../src/utils/format";
+import { color, fontFamily, spacing } from "../../../src/theme/tokens";
 
 const STATES: { id: string; label: string; match: (s: string) => boolean }[] = [
   { id: "todos", label: "Todos", match: () => true },
@@ -34,7 +33,6 @@ const PAGE = 30;
 
 export default function VentasScreen() {
   const allowed = useOrganizerGuard();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { events, myOrganizerId, analyticsOrders, organizerProfile } = useAppStore();
   const [state, setState] = useState("todos");
@@ -63,15 +61,11 @@ export default function VentasScreen() {
   if (!allowed) return null;
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 60 }}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <View style={{ transform: [{ rotate: "180deg" }] }}>
-            <ChevronRight color={color.text} />
-          </View>
-        </Pressable>
-        <Text style={styles.title}>Ventas y pedidos</Text>
-        <View style={{ width: 18 }} />
+    <View style={{ flex: 1 }}>
+      <OrganizerHeader />
+      <ScrollView contentContainerStyle={{ paddingBottom: 150 }}>
+      <View style={styles.titleRow}>
+        <Text style={styles.pageTitle}>Ventas y pedidos</Text>
       </View>
 
       <View style={styles.section}>
@@ -129,7 +123,8 @@ export default function VentasScreen() {
           </Pressable>
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -146,7 +141,10 @@ function Kpi({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.screenX, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  title: { fontFamily: fontFamily.extraBold, fontSize: 18, color: color.text },
+  titleRow: { paddingHorizontal: spacing.screenX, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  pageTitle: { fontFamily: fontFamily.extraBold, fontSize: 22, color: color.text },
+  newButton: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: color.pink },
+  newButtonText: { fontFamily: fontFamily.bold, fontSize: 13, color: color.white },
   section: { paddingHorizontal: spacing.screenX, marginBottom: 16 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   chips: { paddingHorizontal: spacing.screenX, gap: 8, marginBottom: 12 },

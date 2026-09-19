@@ -1,10 +1,11 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Tabs } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { color, fontFamily } from "../../src/theme/tokens";
-import { HomeIcon, SearchIcon, TicketIcon, ProfileIcon } from "../../src/components/icons";
+import { HomeIcon, SearchIcon, TicketIcon, ProfileIcon, DashboardIcon } from "../../src/components/icons";
+import { useAppStore } from "../../src/context/AppStore";
 
 const TABS: Record<string, { label: string; Icon: typeof HomeIcon }> = {
   index: { label: "Inicio", Icon: HomeIcon },
@@ -15,6 +16,8 @@ const TABS: Record<string, { label: string; Icon: typeof HomeIcon }> = {
 
 function CustomTabBar({ state, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { organizerStatus } = useAppStore();
   return (
     // Nota: expo-blur se ve con un halo/ghosting en el Simulador de iOS (limitación
     // conocida de BlurView ahí); en dispositivo real el vidrio se ve nítido.
@@ -40,6 +43,12 @@ function CustomTabBar({ state, navigation }: any) {
             </Pressable>
           );
         })}
+        {organizerStatus === "verified" && (
+          <Pressable onPress={() => router.push("/organizador")} style={styles.item} accessibilityRole="button" accessibilityLabel="Abrir modo organizador">
+            <DashboardIcon active />
+            <Text style={[styles.label, styles.labelActive]}>Organizar</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );

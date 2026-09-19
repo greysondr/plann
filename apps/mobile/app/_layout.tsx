@@ -1,7 +1,7 @@
 import { DarkTheme, Stack, ThemeProvider, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as Font from "expo-font";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
@@ -15,13 +15,30 @@ import {
 import { AmbientBackground } from "../src/components/AmbientBackground";
 import { AppStoreProvider, useAppStore } from "../src/context/AppStore";
 import { color } from "../src/theme/tokens";
+import { getLastMode } from "../src/lib/mode";
 
 // Sin sesión -> manda a /auth/login; ninguna otra pantalla es alcanzable sin
 // haber iniciado sesión (mismo patrón que useOrganizerGuard para organizador).
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { loading, isSignedIn } = useAppStore();
+  const { loading, isSignedIn, organizerStatus } = useAppStore();
   const segments = useSegments();
   const router = useRouter();
+  const restored = useRef(false);
+
+  // Un organizador que cerró la app en su panel la vuelve a abrir ahí. Solo al
+  // arrancar y solo si cae en el inicio: un enlace profundo no se pisa.
+  useEffect(() => {
+    if (loading || !isSignedIn || restored.current) return;
+    restored.current = true;
+    if (organizerStatus !== "verified") return;
+    const parts = segments as string[];
+    const atBuyerHome = parts[0] === "(tabs)" && parts.length <= 2 && (!parts[1] || parts[1] === "index");
+    if (!atBuyerHome) return;
+    getLastMode().then((mode) => {
+      if (mode === "organizer") router.replace("/organizador");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, isSignedIn, organizerStatus]);
 
   useEffect(() => {
     if (loading) return;
@@ -85,13 +102,11 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen name="evento/[id]" />
                 <Stack.Screen name="checkout/[id]" options={{ presentation: "modal" }} />
-                <Stack.Screen name="organizador/index" />
+                <Stack.Screen name="organizador/(panel)" />
                 <Stack.Screen name="organizador/activar" />
                 <Stack.Screen name="organizador/crear" />
                 <Stack.Screen name="organizador/escanear" />
                 <Stack.Screen name="organizador/retiros" />
-                <Stack.Screen name="organizador/eventos" />
-                <Stack.Screen name="organizador/ventas" />
                 <Stack.Screen name="organizador/negocio" />
                 <Stack.Screen name="organizador/analiticas/[id]" />
                 <Stack.Screen name="organizador/equipo" />

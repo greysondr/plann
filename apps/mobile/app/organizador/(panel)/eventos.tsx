@@ -1,17 +1,16 @@
 import React, { useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { GlassCard } from "../../src/components/GlassCard";
-import { Chip } from "../../src/components/Chip";
-import { ChevronRight } from "../../src/components/icons";
-import { PrimaryButton } from "../../src/components/Button";
-import { useAppStore } from "../../src/context/AppStore";
-import { useOrganizerGuard } from "../../src/hooks/useOrganizerGuard";
-import { sumBy } from "../../src/core/orgAnalytics";
-import { formatEventDate } from "../../src/utils/format";
-import { formatUsd } from "../../src/core/pricing";
-import { color, fontFamily, spacing } from "../../src/theme/tokens";
+import { GlassCard } from "../../../src/components/GlassCard";
+import { Chip } from "../../../src/components/Chip";
+import { OrganizerHeader } from "../../../src/components/OrganizerHeader";
+import { PrimaryButton } from "../../../src/components/Button";
+import { useAppStore } from "../../../src/context/AppStore";
+import { useOrganizerGuard } from "../../../src/hooks/useOrganizerGuard";
+import { sumBy } from "../../../src/core/orgAnalytics";
+import { formatEventDate } from "../../../src/utils/format";
+import { formatUsd } from "../../../src/core/pricing";
+import { color, fontFamily, spacing } from "../../../src/theme/tokens";
 
 const TABS = [
   { id: "proximos", label: "Próximos" },
@@ -33,7 +32,6 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function EventosScreen() {
   const allowed = useOrganizerGuard();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { events, myOrganizerId, analyticsOrders, duplicateEvent, publishEvent } = useAppStore();
   const [tab, setTab] = useState("proximos");
@@ -69,15 +67,14 @@ export default function EventosScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 60 }}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <View style={{ transform: [{ rotate: "180deg" }] }}>
-            <ChevronRight color={color.text} />
-          </View>
+    <View style={{ flex: 1 }}>
+      <OrganizerHeader />
+      <ScrollView contentContainerStyle={{ paddingBottom: 150 }}>
+      <View style={styles.titleRow}>
+        <Text style={styles.pageTitle}>Mis eventos</Text>
+        <Pressable style={styles.newButton} onPress={() => router.push("/organizador/crear")}>
+          <Text style={styles.newButtonText}>+ Nuevo</Text>
         </Pressable>
-        <Text style={styles.title}>Mis eventos</Text>
-        <View style={{ width: 18 }} />
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
@@ -151,13 +148,17 @@ export default function EventosScreen() {
           })}
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.screenX, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  title: { fontFamily: fontFamily.extraBold, fontSize: 18, color: color.text },
+  titleRow: { paddingHorizontal: spacing.screenX, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
+  pageTitle: { fontFamily: fontFamily.extraBold, fontSize: 22, color: color.text },
+  newButton: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, backgroundColor: color.pink },
+  newButtonText: { fontFamily: fontFamily.bold, fontSize: 13, color: color.white },
   tabs: { paddingHorizontal: spacing.screenX, gap: 8, marginBottom: 16 },
   section: { paddingHorizontal: spacing.screenX },
   topRow: { flexDirection: "row", alignItems: "center", gap: 12 },
