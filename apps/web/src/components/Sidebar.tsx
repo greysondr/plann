@@ -17,7 +17,7 @@ import {
   LifeBuoy,
   ClipboardCheck,
 } from "lucide-react";
-import { paymentQueue, withdrawals } from "@/lib/mock-data";
+import { adminSignOut } from "@/app/acceso-admin/actions";
 
 const HINTS: Record<string, string> = {
   "/admin": "Resumen del negocio",
@@ -47,11 +47,9 @@ const NAV = [
   { href: "/admin/configuracion", label: "Configuración", icon: Settings },
 ];
 
-export function Sidebar() {
+export function Sidebar({ email, pagos, retiros }: { email: string; pagos: number; retiros: number }) {
   const pathname = usePathname();
-  const pendingPagos = paymentQueue().length;
-  const pendingRetiros = withdrawals.filter((w) => w.status === "pendiente").length;
-  const badges: Record<string, number> = { pagos: pendingPagos, retiros: pendingRetiros };
+  const badges: Record<string, number> = { pagos, retiros };
 
   return (
     <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-border bg-surface">
@@ -88,12 +86,17 @@ export function Sidebar() {
       </nav>
       <div className="border-t border-border px-4 py-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-pink text-[12px] font-extrabold text-white">GD</div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-pink text-[12px] font-extrabold uppercase text-white">{email.slice(0, 2)}</div>
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-bold text-foreground">Grey</p>
-            <p className="truncate text-[11.5px] text-foreground-3">Superadmin · 2FA activo</p>
+            <p className="truncate text-[13px] font-bold text-foreground">Administrador</p>
+            <p className="truncate text-[11.5px] text-foreground-3">{email}</p>
           </div>
         </div>
+        <form action={adminSignOut} className="mt-3">
+          <button type="submit" className="text-[12.5px] font-bold text-foreground-3 hover:text-pink">
+            Cerrar sesión
+          </button>
+        </form>
       </div>
     </aside>
   );

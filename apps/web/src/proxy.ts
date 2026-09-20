@@ -23,6 +23,12 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  // El detalle de "es admin" lo valida requireAdmin() en el layout del admin.
+  if (pathname.startsWith("/admin")) {
+    if (!user) return NextResponse.redirect(new URL("/acceso-admin", request.url));
+    const { data: isAdmin } = await supabase.rpc("is_admin");
+    return isAdmin ? response : NextResponse.redirect(new URL("/acceso-admin?error=no_admin", request.url));
+  }
   const isLogin = pathname === "/organizador/login";
 
   if (!user && !isLogin) {
@@ -35,5 +41,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/organizador/:path*"],
+  matcher: ["/organizador/:path*", "/admin/:path*"],
 };

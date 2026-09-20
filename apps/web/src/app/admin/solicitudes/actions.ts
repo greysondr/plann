@@ -2,14 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-
-const ACTOR = "Admin (web)";
+import { requireAdmin } from "@/lib/admin/session";
 
 async function audit(action: string, target: string, detail: Record<string, unknown>) {
-  await supabaseAdmin().from("audit_log").insert({ actor_label: ACTOR, action, target, detail });
+  const { user } = await requireAdmin();
+  await supabaseAdmin().from("audit_log").insert({ actor_id: user.id, actor_label: user.email ?? "Admin", action, target, detail });
 }
 
 export async function reviewOrganizer(formData: FormData) {
+  await requireAdmin();
   const id = String(formData.get("id"));
   const decision = String(formData.get("decision")) as "verificado" | "rechazado" | "suspendido";
   const reason = String(formData.get("reason") ?? "").trim();
@@ -29,11 +30,12 @@ export async function reviewOrganizer(formData: FormData) {
 }
 
 export async function resolveWithdrawal(formData: FormData) {
+  await requireAdmin();
   const id = String(formData.get("id"));
   const status = String(formData.get("status")) as "pagado" | "rechazado";
   const { error } = await supabaseAdmin()
     .from("withdrawals")
-    .update({ status, resolved_at: new Date().toISOString() })
+    .update({ status, resolved_at: new Date().toISOString(), resolved_by: (await requireAdmin()).user.id })
     .eq("id", id)
     .eq("status", "pendiente");
   if (error) throw new Error(error.message);
@@ -42,6 +44,7 @@ export async function resolveWithdrawal(formData: FormData) {
 }
 
 export async function markRefunded(formData: FormData) {
+  await requireAdmin();
   const id = String(formData.get("id"));
   const { error } = await supabaseAdmin()
     .from("orders")
